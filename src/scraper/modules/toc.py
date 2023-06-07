@@ -1,7 +1,6 @@
 ####### external imports
 
 from lxml import etree
-from bs4 import BeautifulSoup
 from re import M, sub, search, compile
 
 ####### internal imports
@@ -12,7 +11,7 @@ import constants
 
 ####### function
 
-def access_toc(url):
+def get_toc(url):
     try:
         ##test if pg can be pulled with requests, if not then try selenium?
 
@@ -57,7 +56,6 @@ def access_toc(url):
 
             else:
                 novel_title = uncleaned_novel_title
-                pass
 
             novel_filename = sub(r'[\W\&\(\)]', '_', novel_title).lower()
 
@@ -130,6 +128,7 @@ def access_toc(url):
             ,novel_author
             ,novel_summary
             ,chapter_links
+            ,driver
         ]
         print(f'Cool, I got the novel info for {novel_title}!')
     except:
