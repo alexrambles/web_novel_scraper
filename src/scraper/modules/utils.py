@@ -3,26 +3,29 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
 from webdriver_manager.chrome import ChromeDriverManager
 from webdriver_manager.firefox import GeckoDriverManager
 
 from requests import get
 
 def get_selenium(url, driver):
-    driver.get(url)
-
-    print('Trying to get page.')
 
     unloaded = False
 
     while unloaded is False:
         try:
-            element = WebDriverWait(driver, 10).until(
-                EC.presence_of_all_elements_located((By.XPATH, "//div[@class='post-content']//* | //h1[@class='post-title']//text()"))
-            )
+            driver.get(url)
+
+            print('Trying to get page.')
+
+            element = WebDriverWait(driver, 10).until(EC.presence_of_element_located(( By.CSS, "div.post-content" )))
+
             unloaded = True
+
             print('Successfully loaded page content.')
-        except TimeoutError:
+
+        except TimeoutException:
             driver.refresh()
             print('Trying to load page again.')
 
@@ -39,7 +42,7 @@ def init_selenium(url):
     options.add_argument("--ignore-ssl-errors")
     options.add_argument("start-maximized")
     options.add_argument("enable-automation")
-    ##options.add_argument("--headless")
+    options.add_argument("--headless")
     options.add_argument("--disable-infobars")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-browser-side-navigation")
@@ -52,7 +55,7 @@ def init_selenium(url):
 
     driver = webdriver.Chrome(service = Service(ChromeDriverManager().install()), options=options)
 
-    wait = WebDriverWait(driver, 120)
+    wait = WebDriverWait(driver, 60)
 
     driver.get(url)
 
@@ -85,9 +88,14 @@ def get_img(img_url, img_directory, img_description=None):
 def translate(text):
     pass # TODO: create translate function
 
-def open_file(path):
-    with open(path, 'rb', encoding='utf8') as f:
-        return f.read()
+def open_file(path, read_method = 'rb'):
+    if 'b' in read_method:
+        with open(path, read_method) as f:
+            return f.read()
+    else:
+        encoding = 'utf-8'
+        with open(path, read_method, encoding) as f:
+            return f.read()
 
 def save_file(data, path, write_mode = 'wb', encoding = None, filetype = 'text'):
     if filetype == 'text':

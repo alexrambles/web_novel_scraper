@@ -2,7 +2,10 @@
 
 from lxml import etree
 from re import M, sub, search, compile
-import logging
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
 
 ####### internal imports
 
@@ -14,18 +17,30 @@ import constants
 
 def get_chapter(url, driver=None, backup_dir=None):
     ## Open new browser if one isn't already available
+    print('Starting new chapter')
+    
     if driver is None:
         init_selenium = utils.init_selenium(url)
         driver = init_selenium[0]
         wait = init_selenium[1]
     else:
-        utils.get_selenium(url, driver)
+        unloaded = False
 
-    print('Opened url successfully.')
+        while unloaded is False:
+            try:
+                element = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.post-content")))
+
+                driver.get(url)
+                
+                unloaded = True
+
+
+            except TimeoutException:
+                driver.refresh()
+                print('Trying to reload page.')
+
 
     chapter_etree = etree.HTML(driver.page_source)
-
-    print('Created etree.')
 
     chapter_title = chapter_etree.xpath("//h1[@class='page-title']//text()")[0]
 
@@ -54,7 +69,6 @@ def get_chapter(url, driver=None, backup_dir=None):
     if backup_dir is not None:
         img_dir = ''.join([backup_dir, 'images/'])
 
-    print('Scraping page elements...')
     for element in chapter_elements:
         element_content = ''
         if element.tag == 'p':
@@ -116,9 +130,9 @@ def get_chapter(url, driver=None, backup_dir=None):
 
     chapter_text = ''.join(chapter_html_list)
 
-    chapter_html = f'<article id="{chapter_filename}_body"><h1>{chapter_title}</h1>{chapter_text}{footer}</article>'
+    chapter_html = f'<article id="{chapter_filename}_body">{chapter_text}{footer}</article>'
 
-    chapter_html = f'<?xml version="1.0" encoding="utf-8"?><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang = "en" xml:lang="en"><head><title style="display:None;">{chapter_title}</title></head><body epub:type="chapter"><div epub:type="bodymatter"><div><h1 epub:type="title" id="{chapter_filename}">{chapter_title}</h1><h2 epub:type="subtitle">{chapter_subtitle}</h2>{chapter_html}</div>{footer}</div></body></html>'
+    chapter_html = f'<?xml version="1.0" encoding="utf-8"?><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang = "en" xml:lang="en"><head><title style="display:none;">{chapter_title}</title></head><body epub:type="chapter"><div epub:type="bodymatter"><div><h1 epub:type="title" id="{chapter_filename}">{chapter_title}</h1><h2 epub:type="subtitle">{chapter_subtitle}</h2>{chapter_html}</div>{footer}</div></body></html>'
 
     utils.save_file(chapter_html, f'{backup_dir}{chapter_filename}.xhtml', write_mode='w')
 

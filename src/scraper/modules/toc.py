@@ -13,6 +13,7 @@ import constants
 
 def get_toc(url):
     try:
+        print('trying to pull toc')
         ##test if pg can be pulled with requests, if not then try selenium?
 
         ##			write a test to see if you can use requests or selenium is needed
@@ -112,7 +113,7 @@ def get_toc(url):
         try:
             toc_title = toc_page_source.xpath('//*[@class="post-content"]//*[contains(., "Table of Contents") or contains(., "TOC") or contains(., "toc") or contains(., "Table-of-Contents") or contains(., "Table-of-contents")]')[0]
 
-            chapter_links = toc_title.xpath('./following::a/@href')
+            chapter_links = toc_title.xpath('./following::a/@href[not(.//text() = "Twitter")]')
 
         except:
             answer = print(input("I don't see a TOC for this novel. Would you like to supply the first link?"))
