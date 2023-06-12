@@ -11,7 +11,7 @@ import constants
 
 ####### function
 
-def get_toc(url):
+def get_toc(url, novelupdates_data = True, novelupdates_cover = True):
     try:
         print('trying to pull toc')
         ##test if pg can be pulled with requests, if not then try selenium?
@@ -36,6 +36,7 @@ def get_toc(url):
         ,'Table-of-contents'
         ,'Table-of-Contents'
         ]
+
 
         try:
             novel_website = toc_page_source.xpath('//meta[contains(@property, "site_name")]/@content')[0]
@@ -77,60 +78,80 @@ def get_toc(url):
         except:
             novel_author = print(input("I'm sorry. I can't find the author's name. Who wrote this book?"))
 
+        novel_cover_url = ''
 
+        if novelupdates_data is True:
+            novelupdates_data = utils.get_novelupdates_data(novel_title)
+
+            author_alias = ''
+            
+            chapter_links = novelupdates_data[0]
+            author_name = novelupdates_data[1]
+            novel_genres = novelupdates_data[2]
+            novel_tags = novelupdates_data[3]
+            novel_summary = novelupdates_data[4]
+
+            if author_name != novel_author:
+                author_alias = author_name
+        elif novelupdates_cover is True:
+            novel_cover_url = utils.get_novelupdates_data(novel_title)[5]
+        else:
     #######
     # Get novel summary by locating 'synopsis' or 'summary' and pulling all p values after that until you reach an hr element
-        try:
-            novel_summary = ''
-
-            synopsis_title_element = toc_page_source.xpath('//*[contains(text(), "Synopsis")] | //*[contains(text(), "Summary")]')[0]
-
-            if synopsis_title_element.xpath('..')[0].tag == "p":
-                synopsis_title_element = synopsis_title_element.xpath('..')[0]
-                synopsis_list = synopsis_title_element.xpath('./following::*')
-                summary_text_list = []
-                for i in synopsis_list:
-                    if i.tag == 'p' and i.text not in constants.no_no_list:
-                        try:
-                            summary_text_list.append(i.text)
-                        except:
-                            print(f'Warning: unexpected error in novel_summary_text_list. Cannot append {i.text} to summary.')
-                    elif i.tag == 'hr':
-                        break
-
-                novel_summary = " ".join(summary_text_list)
-
-        except:
-            answer = print(input("I don't see a summary for this book. Would you like to add a summary? Y/N"))
-
-            if answer == 'Y':
-                novel_summary = print(input("Please paste the summary here."))
-            else:
+            try:
                 novel_summary = ''
 
-    #####
-    ## Get a list of chapter links by finding TOC elements and pulling all elements after that.
-        try:
-            toc_title = toc_page_source.xpath('//*[@class="post-content"]//*[contains(., "Table of Contents") or contains(., "TOC") or contains(., "toc") or contains(., "Table-of-Contents") or contains(., "Table-of-contents")]')[0]
+                synopsis_title_element = toc_page_source.xpath('//*[contains(text(), "Synopsis")] | //*[contains(text(), "Summary")]')[0]
 
-            chapter_links = toc_title.xpath('./following::a/@href[not(.//text() = "Twitter")]')
+                if synopsis_title_element.xpath('..')[0].tag == "p":
+                    synopsis_title_element = synopsis_title_element.xpath('..')[0]
+                    synopsis_list = synopsis_title_element.xpath('./following::*')
+                    summary_text_list = []
+                    for i in synopsis_list:
+                        if i.tag == 'p' and i.text not in constants.no_no_list:
+                            try:
+                                summary_text_list.append(i.text)
+                            except:
+                                print(f'Warning: unexpected error in novel_summary_text_list. Cannot append {i.text} to summary.')
+                        elif i.tag == 'hr':
+                            break
 
-        except:
-            answer = print(input("I don't see a TOC for this novel. Would you like to supply the first link?"))
+                    novel_summary = " ".join(summary_text_list)
 
-            if answer == '':
-                return print('Could not locate any chapter links. Ending function.')
-            else:
-                chapter_links.append(answer)
+            except:
+                answer = print(input("I don't see a summary for this book. Would you like to add a summary? Y/N"))
+
+                if answer == 'Y':
+                    novel_summary = print(input("Please paste the summary here."))
+                else:
+                    novel_summary = ''
+
+        #####
+        ## Get a list of chapter links by finding TOC elements and pulling all elements after that.
+            try:
+                toc_title = toc_page_source.xpath('//*[@class="post-content"]//*[contains(., "Table of Contents") or contains(., "TOC") or contains(., "toc") or contains(., "Table-of-Contents") or contains(., "Table-of-contents")]')[0]
+
+                chapter_links = toc_title.xpath('./following::a/@href[not(.//text() = "Twitter")]')
+
+            except:
+                answer = print(input("I don't see a TOC for this novel. Would you like to supply the first link?"))
+
+                if answer == '':
+                    return print('Could not locate any chapter links. Ending function.')
+                else:
+                    chapter_links.append(answer)
 
         return [
             novel_filename
             ,novel_title
             ,novel_author
+            ,author_alias
+            ,novel_genres
+            ,novel_tags
             ,novel_summary
             ,chapter_links
+            ,novel_cover_url
             ,driver
         ]
-        print(f'Cool, I got the novel info for {novel_title}!')
     except:
         return print('ERROR: Something went wrong with accessing the TOC.')

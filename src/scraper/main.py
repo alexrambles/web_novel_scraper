@@ -4,9 +4,9 @@
 
 ##3 methods of iterating thru urls: pull from novelupdates, pull from website toc, or click "next" button
 
-##when it comes to scraping the actual chapter body text, there are a few websites that will require extra help. CG, Flying Lines, Google Docs, and Wattpad are some of them. 
+##when it comes to scraping the actual chapter body text, there are a few websites that will require extra help. CG, Flying Lines, Google Docs, and Wattpad are some of them.
 
-##start by building the simplest utility functions. Scroll to bottom of page. Get rid of cookies box. 
+##start by building the simplest utility functions. Scroll to bottom of page. Get rid of cookies box.
 
 ##wattpad--hold down pgdown key until class last-page appears
 
@@ -23,13 +23,23 @@
 
 
 ##          Packages to install         ##
-
-import modules.toc
 import modules.compile
-import modules.utils
-import modules.constants
-		
- 
-##toc_url = input('Please input the URL to the Table of Contents of your novel.')
+import cProfile, pstats
 
-set_up_book('https://rainbow-reads.com/am-toc/')
+def main(url):
+	novel_data = compile.get_novel(url)
+	novel_info = novel_data[0]
+	backup_dir = novel_data[1]
+	chapter_filename_list = novel_data[2]
+
+	compile.create_ebook(novel_info, 'D:\python_projs\proj_save_the_danmei\Books', chapter_filename_list)
+
+if __name__ == '__main__':
+    url = input("Please link to the source you'd like to scrape.")
+
+    profiler = cProfile.Profile()
+    profiler.enable()
+    main(url)
+    profiler.disable()
+    stats = pstats.Stats(profiler).sort_stats('ncalls')
+    stats.print_stats()

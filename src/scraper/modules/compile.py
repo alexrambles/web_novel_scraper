@@ -1,6 +1,3 @@
-##for parsing text
-import translators as translator
-
 ## for accessing the web
 
 from re import sub
@@ -9,6 +6,7 @@ from re import sub
 
 from os import mkdir, listdir
 from ebooklib import epub
+from types import NoneType
 
 ## Importing original modules created for this project
 
@@ -31,10 +29,9 @@ def get_novel(toc_url, no_no_list = constants.no_no_list):
 
     novel_filename  = novel_info[0]
     novel_title     = novel_info[1]
-    novel_author    = novel_info[2]
-    novel_summary   = novel_info[3]
-    chapter_links   = novel_info[4]
-    driver          = novel_info[5]
+    chapter_links   = novel_info[7]
+    novel_cover_url = novel_info[8]
+    driver          = novel_info[9]
 
 
     ## Create backup folder for accessed chapters to reduce load on server
@@ -64,9 +61,14 @@ def get_novel(toc_url, no_no_list = constants.no_no_list):
             chapter_filename_list.append(chapter_filename)
             print(f'{chapter_filename} has been added.')
 
+    if novel_cover_url == '':
+        pass
+    else:
+        utils.get_img(novel_cover_url, f'{backup_dir}images/cover.jpg')
+
     with open(f'{backup_dir}chapter_filename_list.txt', 'w') as f:
         f.write('\n'.join(chapter_filename_list))
-        
+
     return [novel_info, backup_dir, chapter_filename_list]
 
 
@@ -75,9 +77,12 @@ def create_ebook(novel_info, backup_dir, chapter_filename_list  = None):
     novel_filename  = novel_info[0]
     novel_title     = novel_info[1]
     novel_author    = novel_info[2]
-    novel_summary   = novel_info[3]
-    chapter_links   = novel_info[4]
-    driver          = novel_info[5]
+    author_alias    = novel_info[3]
+    novel_genres    = novel_info[4]
+    novel_tags      = novel_info[5]
+    novel_summary   = novel_info[6]
+    chapter_links   = novel_info[7]
+    driver          = novel_info[8]
 
     if chapter_filename_list == None:
         ebook_chapter_list = []
@@ -109,6 +114,9 @@ def create_ebook(novel_info, backup_dir, chapter_filename_list  = None):
 
     print(f"Book Metadata added.")
 
+    ## TODO: Create a google image scraper to find the book cover automatically. Safer is just searching novelupdates, but better results from google img.
+    ##TODO: Build a UI that presents the image found and asks for approval before saving and applying to the novel epub.
+
     # create title page
 
     titlepage = f"<?xml version='1.0' encoding='utf-8'?>" + f'<!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" epub:prefix="z3998: http://www.daisy.org/z3998/2012/vocab/structure/#" lang="en" xml:lang="en"><head><link rel="stylesheet" href="stylesheet.css" type="text/css" /></head><div epub:type="frontmatter"><body><div class="title">{novel_title}</div><div>This ebook is compiled for educational purposes only and is not to be redistributed.</div><div>Title: {novel_title}</div><div>Author: {novel_author} </div><div class="cover"><h1 id="titlepage">{novel_title}</h1><h2>by {novel_author} </h2></div></body></div></html>'
@@ -128,7 +136,7 @@ def create_ebook(novel_info, backup_dir, chapter_filename_list  = None):
     # add contents of chapter to book, spine, and TOC
     for i in chapter_filename_list:
 
-        with open(f'{backup_dir}{i}.xhtml', "r", encoding="utf-8") as f:
+        with open(f'{backup_dir}\{novel_filename}\{i}.html', "r", encoding="utf-8") as f:
             text = f.read()
             ch_content = text
 
@@ -139,9 +147,9 @@ def create_ebook(novel_info, backup_dir, chapter_filename_list  = None):
         except Exception:
             pass
 
-        ebook_chapter = epub.EpubHtml(title=new_chap_title, file_name=i, media_type="text/html")
+        ebook_chapter = epub.EpubHtml(title=new_chap_title, file_name=f'{i}.html', media_type="text/html")
 
-        ebook_chapter.set_content(ch_content)
+        ebook_chapter.set_content(str(ch_content))
 
         book.add_item(ebook_chapter)
 
@@ -152,14 +160,16 @@ def create_ebook(novel_info, backup_dir, chapter_filename_list  = None):
         # add images to book
         # load Image file
 
-    for image_filename in listdir(f'{backup_dir}/images/'):
+    for image_filename in listdir(f'{backup_dir}images/'):
         image_filepath = f'{backup_dir}images/{image_filename}'
-        img = utils.open_file(image_filepath, 'wb')
 
-        filetype = image_filename.split('.')[0]
+        with open(f'{image_filepath}', "rb") as f:
+            image = f.read()
+
+        filetype = image_filename.split('.')[1]
 
         # define Image file path in .epub
-        image_item = epub.EpubItem(uid=image_filename, file_name=f'images/{image_filename}', media_type=f'image/{filetype}', content=img)
+        image_item = epub.EpubItem(uid=image_filename, file_name=f'images/{image_filename}', media_type=f'image/{filetype}', content=image)
 
         # add Image file
         book.add_item(image_item)
@@ -175,7 +185,7 @@ def create_ebook(novel_info, backup_dir, chapter_filename_list  = None):
             uid="stylesheet",
             file_name="stylesheet.css",
             media_type="text/css",
-            content=style,
+            content=style
         )
     )
     print("CSS added.")
@@ -193,7 +203,8 @@ def create_ebook(novel_info, backup_dir, chapter_filename_list  = None):
     book.add_item(epub.EpubNav())
     print("Nav elements added.")
 
-    book_file = backup_dir + novel_filename + ".epub"
+    book_file = 'D:\python_projs\proj_save_the_danmei\Books' + novel_filename + ".epub"
+
 
     epub.write_epub(book_file, book)
 
@@ -201,8 +212,8 @@ def create_ebook(novel_info, backup_dir, chapter_filename_list  = None):
 
 novel_data = get_novel('https://rainbow-reads.com/am-toc/')
 
-novel_info = novel_data[0] 
+novel_info = novel_data[0]
 backup_dir = novel_data[1]
 chapter_filename_list = novel_data[2]
 
-create_ebook(novel_info, backup_dir, chapter_filename_list)
+create_ebook(novel_info, 'D:\python_projs\proj_save_the_danmei\Books', chapter_filename_list)

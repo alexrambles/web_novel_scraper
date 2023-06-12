@@ -7,7 +7,8 @@ from selenium.common.exceptions import TimeoutException
 from webdriver_manager.chrome import ChromeDriverManager
 from webdriver_manager.firefox import GeckoDriverManager
 
-from requests import get
+from requests_html import HTMLSession
+from re import sub
 
 def get_selenium(url, driver):
 
@@ -42,7 +43,7 @@ def init_selenium(url):
     options.add_argument("--ignore-ssl-errors")
     options.add_argument("start-maximized")
     options.add_argument("enable-automation")
-    options.add_argument("--headless")
+    ##options.add_argument("--headless")
     options.add_argument("--disable-infobars")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-browser-side-navigation")
@@ -69,7 +70,9 @@ def init_firefox(url):
 
 def get_img(img_url, img_directory, img_description=None):
 
-    src = get(img_url)
+    session = HTMLSession()
+
+    src = session.get(img_url)
 
     img_filename = img_url.split('/')[-1]
 
@@ -80,7 +83,7 @@ def get_img(img_url, img_directory, img_description=None):
     ## TODO: add img filename to list of images.
     ## TODO: insert html code for img into the chapter text.
 
-    img_html = f'<img src="{img_filename}" alt="{img_description}"></img>'
+    img_html = f'<img src="./images/{img_filename}" alt="{img_description}"></img>'
 
     print(f'Retrieved img: {img_filename}')
     return img_html
@@ -88,7 +91,7 @@ def get_img(img_url, img_directory, img_description=None):
 def translate(text):
     pass # TODO: create translate function
 
-def open_file(path, read_method = 'rb'):
+def open_file(path, read_method = 'r'):
     if 'b' in read_method:
         with open(path, read_method) as f:
             return f.read()
@@ -107,6 +110,61 @@ def save_file(data, path, write_mode = 'wb', encoding = None, filetype = 'text')
             f.write(data)
 
 
+def get_novelupdates_data(novel_title, get_cover = True):
+    session = HTMLSession()
+
+    search_query = sub(r'[^\w ]', '', novel_title).strip().replace(' ', '-').lower()
+
+    r = session.get(f'https://www.novelupdates.com/series/{search_query}')
+
+    novel_cover_url = r.html.xpath('//*[@class="wpb_text_column"]//img/@src')[0]
+    author_name = r.html.find('a#authtag.genre', first=True).text
+    novel_genres = r.html.find('div#seriesgenre a.genre.text')
+    novel_tags = r.html.find('div#showtags a.text')
+    novel_summary_list = r.html.xpath('//div[@id="editdescription"]//p/text()')
+    novel_summary = ' '.join(novel_summary_list)
+
+    last_pagination_link = r.html.xpath('//div[contains(@class, "digg_pagination")]/a[3]/@href', first=True)
+
+    if 'novelupdates.com' in last_pagination_link:
+        pagination_query = last_pagination_link.replace(f'https://www.novelupdates.com/series/{search_query}/', '')
+    else:
+        pagination_query = last_pagination_link[2:]
+
+    num_of_paginated_pages = pagination_query.replace('?pg=', '').replace('#myTable', '')
+    unredirected_chapter_links = [link[2:] for link in r.html.xpath('//*[@id="myTable"]//a[@class="chp-release"]/@href')]
+
+    chapter_links = []
+
+    for link in unredirected_chapter_links:
+        r = session.get('http://' + link)
+        chapter_links.append(r.url)
+
+    ##automate pagination
+    for page_num in range(int(num_of_paginated_pages)+1):
+        unredirected_chapter_links = []
+        r = session.get(f'https://www.novelupdates.com/series/{search_query}/?pg={page_num}#myTable')
+        [unredirected_chapter_links.append(link[2:]) for link in r.html.xpath('//*[@id="myTable"]//a[@class="chp-release"]/@href')]
+
+        for link in unredirected_chapter_links:
+            r = session.get('http://' + link)
+            chapter_links.append(r.url)
+
+    chapter_links.reverse()
+
+    return [
+    chapter_links
+    ,author_name
+    ,novel_genres
+    ,novel_tags
+    ,novel_summary
+    ,novel_cover_url
+    ]
+
+##    book.add_metadata("DC", "description", novel_summary)
+##    for i in novel_tags:
+##        book.add_metadata("DC", "subject", i)
+##    print("Metadata added.")
 
 ##TODO - create functions:
 
