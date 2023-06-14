@@ -132,12 +132,12 @@ def get_novelupdates_data(novel_title, get_cover = True, novelupdates_toc = True
     ## Novel info variables
     author_name = r.html.find('a#authtag.genre', first=True).text
     novel_genres = r.html.find('div#seriesgenre a.genre.text')
-    novel_tags = r.html.find('div#showtags a.text')
+    novel_tags = r.html.xpath('//div[@id="showtags"]/a/text()')
     novel_summary_list = r.html.xpath('//div[@id="editdescription"]//p/text()')
     novel_summary = ' '.join(novel_summary_list)
     novel_toc = []
 
-    if novelupdates_toc:
+    if novelupdates_toc == True:
 
         ## ! Pagination for TOC
         last_pagination_link = r.html.xpath('//div[contains(@class, "digg_pagination")]/a[3]/@href', first=True)
@@ -175,6 +175,9 @@ def get_novelupdates_data(novel_title, get_cover = True, novelupdates_toc = True
             ## reverse the list to be in numerical order
             chapter_links.reverse()
 
+    else:
+        chapter_links = ''
+    
     return [
     chapter_links
     ,author_name

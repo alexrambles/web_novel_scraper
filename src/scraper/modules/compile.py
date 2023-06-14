@@ -17,7 +17,7 @@ def get_novel(toc_url, no_no_list = modules.constants.no_no_list):
 
     ## Get novel info from toc with access_toc function (returns the info needed)
     try:
-        novel_info = modules.tableofcontents.get_toc(toc_url)
+        novel_info = modules.tableofcontents.get_toc(toc_url, novelupdates_data = True, novelupdates_toc = input('Get novel TOC from novelupdates.com? Y/N\n'))
         print('Retrieved novel info from TOC.')
 
     except:
@@ -88,8 +88,6 @@ def create_ebook(novel_info, backup_dir, chapter_filename_list = None):
     novel_genres    = novel_info[4]
     novel_tags      = novel_info[5]
     novel_summary   = novel_info[6]
-    chapter_links   = novel_info[7]
-    driver          = novel_info[8]
     
     novel_tag_string = ', '.join(novel_tags)
 

@@ -11,7 +11,7 @@ import modules.constants
 
 ####### function
 
-def get_toc(url, novelupdates_data = True, novelupdates_cover = True, novelupdates_toc = True):
+def get_toc(url, novelupdates_data, novelupdates_toc, novelupdates_cover = True):
     try:
         print('trying to pull toc')
         ##test if pg can be pulled with requests, if not then try selenium?
@@ -80,19 +80,19 @@ def get_toc(url, novelupdates_data = True, novelupdates_cover = True, novelupdat
 
         novel_cover_url = ''
         author_alias = ''
-        novelupdates_data = []
+        novelupdates_returned = []
         novel_genres = []
         novel_tags = []
         novel_summary = ''
 
-        if novelupdates_data is True:
-            novelupdates_data = modules.utils.get_novelupdates_data(novel_title, novelupdates_toc = False)
+        if novelupdates_data == True:
+            novelupdates_returned = modules.utils.get_novelupdates_data(novel_title, get_cover = True, novelupdates_toc = novelupdates_toc)
 
-            chapter_links = novelupdates_data[0]
-            author_alias = novelupdates_data[1]
-            novel_genres = novelupdates_data[2]
-            novel_tags = novelupdates_data[3]
-            novel_summary = novelupdates_data[4]
+            chapter_links = novelupdates_returned[0]
+            author_alias = novelupdates_returned[1]
+            novel_genres = novelupdates_returned[2]
+            novel_tags = novelupdates_returned[3]
+            novel_summary = novelupdates_returned[4]
 
 
         else:
@@ -126,6 +126,10 @@ def get_toc(url, novelupdates_data = True, novelupdates_cover = True, novelupdat
                 else:
                     novel_summary = ''
 
+        if novelupdates_toc == "Y" or novelupdates_toc == "y":
+            chapter_links = novelupdates_returned[0]
+
+        else:
             #####
             ## Get a list of chapter links by finding TOC elements and pulling all elements after that.
             try:
