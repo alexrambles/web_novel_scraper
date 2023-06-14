@@ -5,13 +5,13 @@ from re import M, sub, search, compile
 
 ####### internal imports
 
-import utils
-import constants
+import modules.utils
+import modules.constants
 
 
 ####### function
 
-def get_toc(url, novelupdates_data = True, novelupdates_cover = True):
+def get_toc(url, novelupdates_data = True, novelupdates_cover = True, novelupdates_toc = True):
     try:
         print('trying to pull toc')
         ##test if pg can be pulled with requests, if not then try selenium?
@@ -21,7 +21,7 @@ def get_toc(url, novelupdates_data = True, novelupdates_cover = True):
 
         ##set up chrome options if using selenium
 
-        init_selenium = utils.init_selenium(url)
+        init_selenium = modules.utils.init_selenium(url)
 
         driver = init_selenium[0]
 
@@ -79,25 +79,24 @@ def get_toc(url, novelupdates_data = True, novelupdates_cover = True):
             novel_author = print(input("I'm sorry. I can't find the author's name. Who wrote this book?"))
 
         novel_cover_url = ''
+        author_alias = ''
+        novelupdates_data = []
+        novel_genres = []
+        novel_tags = []
+        novel_summary = ''
 
         if novelupdates_data is True:
-            novelupdates_data = utils.get_novelupdates_data(novel_title)
+            novelupdates_data = modules.utils.get_novelupdates_data(novel_title, novelupdates_toc = False)
 
-            author_alias = ''
-            
             chapter_links = novelupdates_data[0]
-            author_name = novelupdates_data[1]
+            author_alias = novelupdates_data[1]
             novel_genres = novelupdates_data[2]
             novel_tags = novelupdates_data[3]
             novel_summary = novelupdates_data[4]
 
-            if author_name != novel_author:
-                author_alias = author_name
-        elif novelupdates_cover is True:
-            novel_cover_url = utils.get_novelupdates_data(novel_title)[5]
+
         else:
-    #######
-    # Get novel summary by locating 'synopsis' or 'summary' and pulling all p values after that until you reach an hr element
+            ## Get novel summary by locating 'synopsis' or 'summary' and pulling all p values after that until you reach an hr element
             try:
                 novel_summary = ''
 
@@ -108,7 +107,7 @@ def get_toc(url, novelupdates_data = True, novelupdates_cover = True):
                     synopsis_list = synopsis_title_element.xpath('./following::*')
                     summary_text_list = []
                     for i in synopsis_list:
-                        if i.tag == 'p' and i.text not in constants.no_no_list:
+                        if i.tag == 'p' and i.text not in modules.constants.no_no_list:
                             try:
                                 summary_text_list.append(i.text)
                             except:
@@ -123,11 +122,12 @@ def get_toc(url, novelupdates_data = True, novelupdates_cover = True):
 
                 if answer == 'Y':
                     novel_summary = print(input("Please paste the summary here."))
+
                 else:
                     novel_summary = ''
 
-        #####
-        ## Get a list of chapter links by finding TOC elements and pulling all elements after that.
+            #####
+            ## Get a list of chapter links by finding TOC elements and pulling all elements after that.
             try:
                 toc_title = toc_page_source.xpath('//*[@class="post-content"]//*[contains(., "Table of Contents") or contains(., "TOC") or contains(., "toc") or contains(., "Table-of-Contents") or contains(., "Table-of-contents")]')[0]
 
@@ -140,6 +140,18 @@ def get_toc(url, novelupdates_data = True, novelupdates_cover = True):
                     return print('Could not locate any chapter links. Ending function.')
                 else:
                     chapter_links.append(answer)
+
+            try:
+                novel_genres_raw = toc_page_source.xpath('//a[@class="series-tag"]/text()')
+
+                for i in novel_genres_raw:
+                    novel_genres.append(i.split(' (')[0])
+
+            except:
+                novel_genres = []
+
+        if novelupdates_cover is True:
+            novel_cover_url = modules.utils.get_novelupdates_data(novel_title)[5]
 
         return [
             novel_filename

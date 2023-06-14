@@ -43,7 +43,7 @@ def init_selenium(url):
     options.add_argument("--ignore-ssl-errors")
     options.add_argument("start-maximized")
     options.add_argument("enable-automation")
-    ##options.add_argument("--headless")
+    options.add_argument("--headless")
     options.add_argument("--disable-infobars")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-browser-side-navigation")
@@ -75,6 +75,12 @@ def get_img(img_url, img_directory, img_description=None):
     src = session.get(img_url)
 
     img_filename = img_url.split('/')[-1]
+
+    if img_description == 'cover_img':
+        img_filename = 'cover.jpg'
+
+    else:
+        pass
 
     img_path = ''.join([img_directory, img_filename])
 
@@ -109,48 +115,65 @@ def save_file(data, path, write_mode = 'wb', encoding = None, filetype = 'text')
         with open(path, write_mode) as f:
             f.write(data)
 
-
-def get_novelupdates_data(novel_title, get_cover = True):
+def get_novelupdates_data(novel_title, get_cover = True, novelupdates_toc = True):
     session = HTMLSession()
 
     search_query = sub(r'[^\w ]', '', novel_title).strip().replace(' ', '-').lower()
 
     r = session.get(f'https://www.novelupdates.com/series/{search_query}')
 
-    novel_cover_url = r.html.xpath('//*[@class="wpb_text_column"]//img/@src')[0]
+    if get_cover:
+        novel_cover_url = r.html.xpath('//*[@class="wpb_text_column"]//img/@src')[0]
+
+    else:
+        novel_cover_url = ''
+
+
+    ## Novel info variables
     author_name = r.html.find('a#authtag.genre', first=True).text
     novel_genres = r.html.find('div#seriesgenre a.genre.text')
     novel_tags = r.html.find('div#showtags a.text')
     novel_summary_list = r.html.xpath('//div[@id="editdescription"]//p/text()')
     novel_summary = ' '.join(novel_summary_list)
+    novel_toc = []
 
-    last_pagination_link = r.html.xpath('//div[contains(@class, "digg_pagination")]/a[3]/@href', first=True)
+    if novelupdates_toc:
 
-    if 'novelupdates.com' in last_pagination_link:
-        pagination_query = last_pagination_link.replace(f'https://www.novelupdates.com/series/{search_query}/', '')
-    else:
-        pagination_query = last_pagination_link[2:]
+        ## ! Pagination for TOC
+        last_pagination_link = r.html.xpath('//div[contains(@class, "digg_pagination")]/a[3]/@href', first=True)
 
-    num_of_paginated_pages = pagination_query.replace('?pg=', '').replace('#myTable', '')
-    unredirected_chapter_links = [link[2:] for link in r.html.xpath('//*[@id="myTable"]//a[@class="chp-release"]/@href')]
+        if 'novelupdates.com' in last_pagination_link:
+            pagination_query = last_pagination_link.replace(f'https://www.novelupdates.com/series/{search_query}/', '')
 
-    chapter_links = []
+        else:
+            pagination_query = last_pagination_link[2:]
 
-    for link in unredirected_chapter_links:
-        r = session.get('http://' + link)
-        chapter_links.append(r.url)
+        num_of_paginated_pages = pagination_query.replace('?pg=', '').replace('#myTable', '')
+        unredirected_chapter_links = [link[2:] for link in r.html.xpath('//*[@id="myTable"]//a[@class="chp-release"]/@href')]
+        chapter_titles = r.html.xpath('//*[@id="myTable"]//a[@class="chp-release"]/text()')
 
-    ##automate pagination
-    for page_num in range(int(num_of_paginated_pages)+1):
-        unredirected_chapter_links = []
-        r = session.get(f'https://www.novelupdates.com/series/{search_query}/?pg={page_num}#myTable')
-        [unredirected_chapter_links.append(link[2:]) for link in r.html.xpath('//*[@id="myTable"]//a[@class="chp-release"]/@href')]
+        chapter_links = []
 
         for link in unredirected_chapter_links:
             r = session.get('http://' + link)
             chapter_links.append(r.url)
 
-    chapter_links.reverse()
+        ## ! handle redirects for automating pagination
+        for page_num in range(int(num_of_paginated_pages)+1):
+            unredirected_chapter_links = []
+            r = session.get(f'https://www.novelupdates.com/series/{search_query}/?pg={page_num}#myTable')
+            [unredirected_chapter_links.append(link[2:]) for link in r.html.xpath('//*[@id="myTable"]//a[@class="chp-release"]/@href')]
+
+            for link in unredirected_chapter_links:
+                r = session.get('http://' + link)
+                chapter_links.append(r.url)
+
+        ## ! Check if list is in order
+        if sorted(chapter_titles) == chapter_titles:
+            pass
+        else:
+            ## reverse the list to be in numerical order
+            chapter_links.reverse()
 
     return [
     chapter_links

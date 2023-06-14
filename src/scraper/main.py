@@ -24,22 +24,17 @@
 
 ##          Packages to install         ##
 import modules.compile
-import cProfile, pstats
+
 
 def main(url):
-	novel_data = compile.get_novel(url)
+	novel_data = modules.compile.get_novel(url)
 	novel_info = novel_data[0]
 	backup_dir = novel_data[1]
 	chapter_filename_list = novel_data[2]
 
-	compile.create_ebook(novel_info, 'D:\python_projs\proj_save_the_danmei\Books', chapter_filename_list)
+	modules.compile.create_ebook(novel_info, "D:/python_projs/proj_save_the_danmei/Books/", chapter_filename_list)
 
 if __name__ == '__main__':
-    url = input("Please link to the source you'd like to scrape.")
+    url = input("Please link to the source you'd like to scrape.  --\n")
 
-    profiler = cProfile.Profile()
-    profiler.enable()
     main(url)
-    profiler.disable()
-    stats = pstats.Stats(profiler).sort_stats('ncalls')
-    stats.print_stats()
