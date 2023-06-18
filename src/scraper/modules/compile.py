@@ -13,7 +13,7 @@ from ebooklib import epub
 import modules.tableofcontents, modules.utils, modules.constants, modules.chapter
 
 
-def get_novel(toc_url, no_no_list = modules.constants.no_no_list):
+def get_novel(toc_url, no_no_list = modules.constants.no_no_list, password = ''):
 
     ## Get novel info from toc with access_toc function (returns the info needed)
     try:
@@ -24,7 +24,6 @@ def get_novel(toc_url, no_no_list = modules.constants.no_no_list):
         return print('ERROR: Could not get novel info from TOC.')
 
     ## Assign all values to their proper variables
-
     novel_filename  = novel_info[0]
     novel_title     = novel_info[1]
     chapter_links   = novel_info[7]
@@ -36,27 +35,40 @@ def get_novel(toc_url, no_no_list = modules.constants.no_no_list):
     backup_dir = f"D:/python_projs/proj_save_the_danmei/Books/{novel_filename}/"
     img_dir = f"D:/python_projs/proj_save_the_danmei/Books/{novel_filename}/images/"
 
+    ## Does the directory for the novel exist? If not, create it.
     try:
         mkdir(backup_dir)
+        
     except FileExistsError:
         print(f"Warning: Directory for {novel_title} already exists.")
 
+    ## Is the sub-directory for images created? If not, create it.
     try:
         mkdir(img_dir)
+        
     except FileExistsError:
         print(f"Warning: Images folder for {novel_title} already exists.")
 
-    img_filename_list = []
     chapter_filename_list = []
     chapter_filename = None
 
     ## Get chapters for each ch link
+    if 'chrysanthemum' in chapter_links[0]:
+        modules.utils.init_selenium(toc_url, javascript= False)
+        
+    elif 'wattpad' in chapter_links[0]:
+        modules.utils.init_selenium(toc_url, javascript= True)
+    
+    else:
+        pass
+    
+    ## ! For each chapter link, get chapter, unless it contains twitter/facebook in url
     for link in chapter_links:
         if 'twitter' in link or 'facebook' in link:
             break
 
         else:
-            chapter_filename = modules.chapter.get_chapter(link, driver, backup_dir)
+            chapter_filename = modules.chapter.get_chapter(link, driver, backup_dir, password)
 
             if chapter_filename not in chapter_filename_list:
                 chapter_filename_list.append(chapter_filename)
@@ -65,11 +77,13 @@ def get_novel(toc_url, no_no_list = modules.constants.no_no_list):
     if novel_cover_url == '':
         pass
 
+    ## ! Get cover image and save it
     else:
         modules.utils.get_img(novel_cover_url, img_dir, img_description='cover_img')
 
         print(f'Cover image saved to {img_dir}')
 
+    ## Save chapter filename list to saved file.
     with open(f'{backup_dir}chapter_filename_list.txt', 'w') as f:
         f.write('\n'.join(chapter_filename_list))
 
@@ -129,37 +143,41 @@ def create_ebook(novel_info, backup_dir, chapter_filename_list = None):
     ## TODO: Create a google image scraper to find the book cover automatically. Safer is just searching novelupdates, but better results from google img.
     ## TODO: Build a UI that presents the image found and asks for approval before saving and applying to the novel epub.
 
+
+    
+    ## create spine and toc variable
+    spine = []
+    toc_list = []
+    
     ## Set book cover
     with open( f'{img_dir}cover.jpg', "rb" ) as f:
         cover_image = f.read()
 
-    book.set_cover( file_name=f'cover.jpg', content=cover_image )
+    book.set_cover( file_name=f'cover.jpg', content=cover_image)
+
+    spine.append("cover.xhtml")
 
     print(f'{img_dir}cover.jpg')
 
     ## create title page
     #titlepage = "<?xml version='1.0' encoding='utf-8'?><!DOCTYPE html>" + f'<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" epub:prefix="z3998: http://www.daisy.org/z3998/2012/vocab/structure/#" lang="en" xml:lang="en"><head><title>{novel_title}</title><link rel="stylesheet" href="stylesheet.css" type="text/css" /></head><div epub:type="frontmatter"><body><div class="title">{novel_title}</div><div>This ebook is compiled for educational purposes only and is not to be redistributed.</div><div>Title: {novel_title}</div><div>Author: {novel_author} {author_alias}</div><div class="cover"><h1 id="titlepage">{novel_title}</h1><h2>by {novel_author} {author_alias}</h2><p>Tags: {", ".join(novel_tags)}</p><img src="images/cover.jpg" alt = "cover_image"/></div></body></div></html>'
 
-    titlepage = f'<?xml version="1.0" encoding="utf-8"?><!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" epub:prefix="z3998: http://www.daisy.org/z3998/2012/vocab/structure/#" lang="en" xml:lang="en"><head><title>{novel_title}</title><link rel="stylesheet" href="stylesheet.css" type="text/css" /><meta charset = "utf-8"/></head><div epub:type="frontmatter"><body><div class="title">{novel_title}</div><div>This ebook is compiled for educational purposes only and is not to be redistributed.</div><div>Title: {novel_title}</div><div>Author: {novel_author} {author_alias}</div><div class="cover"><h1 id="titlepage">{novel_title}</h1><h2>by {novel_author} {author_alias}</h2><p>Tags: {novel_tag_string}</p><img src="images/cover.jpg"></img></div></body></div></html>'
+    titlepage_html = f'<?xml version="1.0" encoding="utf-8"?><!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" epub:prefix="z3998: http://www.daisy.org/z3998/2012/vocab/structure/#" lang="en" xml:lang="en"><head><title>{novel_title}</title><link rel="stylesheet" href="stylesheet.css" type="text/css" /><meta charset = "utf-8"/></head><div epub:type="frontmatter"><body><div class="title">{novel_title}</div><div>This ebook is compiled for educational purposes only and is not to be redistributed.</div><div>Title: {novel_title}</div><div>Author: {novel_author} {author_alias}</div><div class="cover"><h1 id="titlepage">{novel_title}</h1><h2>by {novel_author} {author_alias}</h2><p>Tags: {novel_tag_string}</p><img src="images/cover.jpg"></img></div></body></div></html>'
 
 
     ## set title page
-    book.add_item(epub.EpubItem(
+    title_page = book.add_item(epub.EpubItem(
         uid="title_page"
         ,file_name="titlepage.html"
-        ,content=titlepage))
+        ,content=titlepage_html, media_type="application/xhtml+xml"))
+
+    spine.append("title_page")
+    toc_list.append("title_page")
 
     print("Title page added.")
 
-    ## create spine variable and set up
-    spine = [
-        "cover.jpg"
-        ,"title_page"
-        ,"nav"
-        ,"toc"
-        ]
+    spine.append("nav")
 
-    toc_list = ["title_page"]
 
     # add contents of chapter to book, spine, and TOC
     for i in chapter_filename_list:
@@ -171,6 +189,8 @@ def create_ebook(novel_info, backup_dir, chapter_filename_list = None):
         try:
             chap_title = i.rsplit(".", 1)[0]
             chap_num = sub("[^0-9.]", " ", chap_title).strip()
+            if chap_num == '':
+                chap_num = '0'
             new_chap_title = "Chapter " + chap_num
 
         except Exception:
@@ -180,7 +200,7 @@ def create_ebook(novel_info, backup_dir, chapter_filename_list = None):
             epub.EpubHtml(
                 title=new_chap_title
                 ,file_name=f'{i}.html'
-                ,media_type="text/html"
+                ,media_type="application/xhtml+xml"
                 )
 
         ebook_chapter.set_content( str(ch_content) )
@@ -200,13 +220,14 @@ def create_ebook(novel_info, backup_dir, chapter_filename_list = None):
         with open(f'{image_filepath}', "rb") as f:
             image = f.read()
 
-        filetype = image_filename.split('.')[1]
+        filename = image_filename.split('.')[0]
+        image_filename = f'{filename}.jpg'
 
         # * define Image file path in .epub
         image_item = epub.EpubItem(
             uid=image_filename
             ,file_name=f'images/{image_filename}'
-            ,media_type=f'image/{filetype}'
+            ,media_type=f'image/jpeg'
             ,content=image
             )
 

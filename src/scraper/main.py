@@ -27,7 +27,7 @@ import modules.compile
 
 
 def main(url):
-	novel_data = modules.compile.get_novel(url)
+	novel_data = modules.compile.get_novel(url, password = 'sdgfjhsdt')
 	novel_info = novel_data[0]
 	backup_dir = novel_data[1]
 	chapter_filename_list = novel_data[2]

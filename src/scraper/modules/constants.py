@@ -39,7 +39,14 @@ no_no_list = [
     ,"TOC"
     ,"Twitter"
     ,None
-]
+    ,'Chrysanthemum Garden.'
+    ,'Please visit chrysanthemumgarden (dot) com'
+    ,"Chrysanthemum Garden."
+    ,"Please visit chrysanthemumgarden (dot) com"
+    ,"Please support our translators at chrysanthemumgarden (dot) com"
+    ,"Read more BL at chrysanthemumgarden (dot) com"
+    ,"Story translated by Chrysanthemum Garden."
+    ]
 
 img_suffixes = [
     ".gif"
