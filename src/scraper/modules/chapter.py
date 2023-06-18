@@ -60,6 +60,10 @@ def get_chapter(url, driver=None, backup_dir=None, password=''):
             if chapter_etree.xpath("//*[@id= 'site-pass']"):
                 driver = modules.utils.unlock_site(driver, password)
             
+            if driver.find_elements(By.XPATH, '/html/body/center/h1[.="502 Bad Gateway"]'):
+                print( f'ERROR: {url} encountered a bad gateway. Retrying the request.')
+                driver.refresh()
+            
             chapter_title = chapter_etree.xpath("//h1[@class='page-title']//text() | //header/h1[@class='h2']/text() | //*[@class = 'chapter-title']/text()")[0]
 
             chapter_subtitle = ''
