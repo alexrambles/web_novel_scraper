@@ -74,7 +74,7 @@ def get_chapter(url, driver=None, backup_dir=None, password=''):
                     elif len(i) >5:
                         chapter_subtitle = i.replace('\n', '').strip()
 
-            chapter_filename = sub(r'[^\w\&]', '_', chapter_title).replace('&', 'and').lower()
+            chapter_filename = sub(r'[^\w\&]', '_', chapter_title).replace('&', 'and').strip('_').lower()
 
             chapter_elements = chapter_etree.xpath("//div[@class='post-content']//* | //div[@id='novel-content']//*")
 
