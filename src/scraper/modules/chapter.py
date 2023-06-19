@@ -10,6 +10,10 @@ from selenium.common.exceptions import TimeoutException, ElementClickIntercepted
 from types import NoneType
 from requests_html import HTMLSession
 from time import time
+from unicodedata import normalize
+import faulthandler
+import signal
+import logging
 
 ####### internal imports
 
@@ -64,9 +68,13 @@ def get_chapter(url, driver=None, backup_dir=None, password=''):
                 print( f'ERROR: {url} encountered a bad gateway. Retrying the request.')
                 driver.refresh()
             
-            chapter_title = chapter_etree.xpath("//h1[@class='page-title']//text() | //header/h1[@class='h2']/text() | //*[@class = 'chapter-title']/text()")[0]
-
-            chapter_subtitle = ''
+            elif 'knoxt' in url:
+                chapter_title = chapter_etree.xpath("//div[@class='epheader']/h1/text() | //h1[@class='page-title']//text() | //header/h1[@class='h2']/text() | //*[@class = 'chapter-title']/text()")[0]
+                chapter_subtitle = chapter_etree.xpath("//div[@class='epheader']/div[@class='cat-series']/text()")
+            
+            else:
+                chapter_title = chapter_etree.xpath("//h1[@class='page-title']//text() | //header/h1[@class='h2']/text() | //*[@class = 'chapter-title']/text()")[0]
+                chapter_subtitle = ''
 
             if ":" in chapter_title:
                 chapter_name_list = chapter_title.split(':')
@@ -81,6 +89,9 @@ def get_chapter(url, driver=None, backup_dir=None, password=''):
             chapter_filename = sub(r'[^\w\&]', '_', chapter_title).replace('&', 'and').strip('_').lower()
 
             chapter_elements = chapter_etree.xpath("//div[@class='post-content']//* | //div[@id='novel-content']//*")
+
+            if 'knoxt' in url:
+                chapter_elements = chapter_etree.xpath("//div[contains(@class, 'epcontent')]/p")
 
             chapter_html_list = []
 
@@ -101,19 +112,20 @@ def get_chapter(url, driver=None, backup_dir=None, password=''):
 
             for element in chapter_elements:
                 element_content = ''
+                
                 if element.tag == 'p':
-                    if element.xpath('.//em | .//strong | .//sup | .//i | .//b |  .//span[@class="tooltip-toggle"]'):
+                    if element.xpath('.//em | .//strong | .//sup | .//i | .//b | .//span[@class="tooltip-toggle"] | .//span[@class="tooltip"] | .//span[@role="tooltip"] | .//span[@style="text-decoration: underline"] | .//span[@style = "font-weight: 400"]'):
                         if element.text is not None and element.text not in modules.constants.no_no_list:
-                            element_content = element.text
+                            element_content += element.text
 
-                        for i in element.xpath('.//em | .//strong | .//sup | .//i | .//b | .//span[@class="tooltip-toggle"]'):
-                            if i.tag == 'span':     
+                        for i in element.xpath('.//em | .//strong | .//sup | .//i | .//b | .//span[@class="tooltip-toggle"] | .//span[@class="tooltip"] | .//span[@role="tooltip"] | .//span[@style="text-decoration: underline"] | .//span[@style = "font-weight: 400"]'):
+                            if i in element.xpath('.//span[@class="tooltip-toggle"]'):     
                                 footnote_number += 1                   
                                 tooltip_id = i.attrib['tooltip-target']
-                                element_content = f'{element_content}<a epub:type = "noteref" href="#{tooltip_id}" id = "fn{footnote_number}">{i.text}</a>'
+                                element_content += f'{element_content}<a epub:type = "noteref" href="#{tooltip_id}" id = "fn{footnote_number}">{i.text}</a>'
                                 
                                 if i.tail is not None:
-                                    element_content = f'{element_content}{i.tail}'
+                                    element_content += f'{element_content}{i.tail}'
                                 
                                 if not driver.find_elements_by_id(tooltip_id):
                                     try:
@@ -135,28 +147,45 @@ def get_chapter(url, driver=None, backup_dir=None, password=''):
                                 tooltip_p = chapter_etree.xpath(f'//div[@id="{tooltip_id}"]/*')[0]
                                 tooltip = f'<p><a href = "#fn{footnote_number}" id="{tooltip_id}"><strong>{i.text}</strong></a> -- {tooltip_p.tail}</p>'
                                 footer_content.append(f'<div epub:type="footnote" class="tooltip">{tooltip}</div>')
+                            
+                            elif i in element.xpath('.//span[@style="text-decoration: underline"]'):
+                                element_content += f'<u>{i.text}</u>'
                                     
+                            elif i.get('role') == 'tooltip':
+                                tooltip = f'<a href = "#fn{footnote_number}" id="footnote{footnote_number}">{footnote_number}</a> -- {i.text}'
+                                footer_content.append(f'<div epub:type="footnote" class="tooltip">{tooltip}</div>')
+                            
                             elif i.tag == 'sup':
-                                print('Warning: you have not yet programmed in handling of superscript.')
-                                break
+                                footnote_number += 1
+                                i_content = i.xpath('./a')[0]
+                                element_content += f'<sup><a epub:type = "noteref" href="#footnote{footnote_number}" id="fn{footnote_number}">{i_content.text}</a></sup>'
+                                
+                                if i.tail is not None:
+                                    element_content += i.tail
+                                    
+                            elif i.get('style') == 'font-weight: 400':
+                                element_content += i.text
 
                             if i.tail not in modules.constants.no_no_list:
                                 if element_content[-len(i.tag)+1:] == i.tag + '>':
                                     element_content = element_content[:-len(i.tag)-1]
                                     element_content += f'{i.text}</{i.tag}>{i.tail}'
 
-                                else:
+                                elif i.text not in modules.constants.no_no_list and i.text not in '\t'.join(footer_content):
                                     element_content += f' <{i.tag}>{i.text}</{i.tag}>{i.tail}'
+                                    
+                                else:
+                                    element_content = f'{element_content}{i.tail}'
 
                             else:
                                 if element_content[-len(i.tag)+1:] == i.tag + '>':
                                     element_content = element_content[:-len(i.tag)-1]
                                     element_content += f'{i.text}</{i.tag}>'
 
-                                else:
+                                elif i.text not in modules.constants.no_no_list and i.text not in element_content and (i.text != None or i.tail != None):
                                     element_content += f' <{i.tag}>{i.text}</{i.tag}>'
 
-                        if element.tail is not None and element.tail not in modules.constants.no_no_list:
+                        if element_content not in footer_content and element.tail is not None and element.tail not in modules.constants.no_no_list:
                             element_content = f'{element_content}{element.tail}</p>'
 
                     elif element.text is not None and element.text not in modules.constants.no_no_list:
@@ -192,6 +221,7 @@ def get_chapter(url, driver=None, backup_dir=None, password=''):
                     continue
 
         except TimeoutException:
+            logging.warning(f'Had to refresh url {url}')
             try_again = True
             driver.refresh()
 

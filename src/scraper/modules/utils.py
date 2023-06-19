@@ -11,28 +11,37 @@ from webdriver_manager.firefox import GeckoDriverManager
 from requests_html import HTMLSession
 from re import sub
 import time
+import logging
 
+
+# ! Logging setup
+logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s : %(funcName)s:%(lineno)d] %(message)s',
+    datefmt='%Y-%m-%d:%H:%M:%S',
+    level=logging.DEBUG)
+log = logging.getLogger(__name__)
+log.addHandler(logging.NullHandler())
+
+
+# ! Functions
 def get_selenium(url, driver):
-
+    log.info("Getting %s with Selenium", url)
     unloaded = False
 
     while unloaded is False:
         try:
             driver.get(url)
 
-            print('Trying to get page.')
-
             element = WebDriverWait(driver, 10).until(EC.presence_of_element_located(( By.CSS, "div.post-content" )))
 
             unloaded = True
-
-            print('Successfully loaded page content.')
+            log.info("Loaded %(url)s successfully")
 
         except TimeoutException:
+            log.error('Unable to load page content: attempting reload.')
             driver.refresh()
-            print('Trying to load page again.')
 
 def init_selenium(url, javascript = False):
+    log.info('Initializing selenium with url: %(url)s')
     browser_header = {
         "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 \
         (KHTML, like Gecko) Chrome/44.0.2403.157 Safari/537.36",
@@ -56,8 +65,10 @@ def init_selenium(url, javascript = False):
     options.add_experimental_option( "prefs",{'profile.managed_default_content_settings.javascript': 2} )
     ##options.add_argument(f"--force-device-scale-factor={desired_dpi}")
     if 'wattpad' in url:
+        log.info("Disabling Javascript.")
         pass
     else:
+        log.info("Enabling Javascript")
         options.add_experimental_option( "prefs",{'profile.managed_default_content_settings.javascript': 1} )
 
     driver = webdriver.Chrome( service = Service(ChromeDriverManager().install()), options=options )
@@ -78,6 +89,7 @@ def init_firefox(url):
     return firefox_driver
 
 def get_img(img_url, img_directory, img_description=None):
+    log.info("Getting img from %(img_url)s")
 
     session = HTMLSession()
 
@@ -100,7 +112,7 @@ def get_img(img_url, img_directory, img_description=None):
 
     img_html = f'<img src="./images/{img_filename}.jpg" alt="{img_description}"></img>'
 
-    print(f'Retrieved img: {img_filename}')
+    log.info("Retrieved %(img_filename)s. Returning img HTML.")
     return img_html
 
 def translate(text):
@@ -134,12 +146,17 @@ def wattpad_scroll_down(driver):
         
         if len(load_more) != 0 and "hidden" not in load_more[0].get("class"):
             continue
-        elif len(next_button) != 0 or len(driver.find_element(By.XPATH, '//div[contains(@class, "last-page")]//pre//p')) > 0:
+        
+        elif len(next_button) != 0 or len(driver.find_elements(By.XPATH, '//div[contains(@class, "last-page")]//pre//p')) > 0:
             if item_presence:
                 pass
             else:
                 item_presence = True
                 continue
+            
+        elif len(driver.find_elements(By.XPATH, '//div[@id="story-part-navigation"]/div[@class="message"]/div[@class="top-message"]')) > 0 and "🎉 You've finished reading " in driver.find_elements(By.XPATH, '//div[@id="story-part-navigation"]/div[@class="message"]/div[@class="top-message"]')[0].text:
+            item_presence = True
+            continue
 
 def open_file(path, read_method = 'r'):
     if 'b' in read_method:
@@ -205,6 +222,13 @@ def unlock_site(driver, password):
                     (By.XPATH, "//div[@id='novel-content']")
                 )
             )
+            
+def logging_module():
+
+    
+    def func():
+        log.critical('A Critical Error!')
+        log.debug('A Debug Error!')
             
 def get_novelupdates_data(novel_title, get_cover = True, novelupdates_toc = True):
     session = HTMLSession()

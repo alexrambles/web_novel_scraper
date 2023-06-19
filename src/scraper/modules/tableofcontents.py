@@ -72,6 +72,8 @@ def get_toc(url, novelupdates_data, novelupdates_toc, novelupdates_cover = True)
 
         ## ! Author's name
         try:
+
+
             author_string = toc_page_source.xpath('//p[contains(text(), "Author")] | //p[contains(., "Author")]')[0].text
             
             if author_string == None and toc_page_source.xpath('//p[contains(., "Author")]//*')[0].text != None and toc_page_source.xpath('//p[contains(., "Author")]//*')[0].text != "Author’s Notes:":
@@ -169,6 +171,10 @@ def get_toc(url, novelupdates_data, novelupdates_toc, novelupdates_cover = True)
                 
             elif 'wattpad' in novel_website.lower():
                 chapter_links = ["http://wattpad.com" + x for x in toc_page_source.xpath("//div[@class=\'story-parts\']//li/a/@href")]
+                
+            elif 'knoxt' in novel_website.lower():
+                chapter_links = toc_page_source.xpath("//div[contains(@class, 'eplister')]//ul//li//a/@href")
+                chapter_links = list(reversed(chapter_links))
             
             else:
                 try:
