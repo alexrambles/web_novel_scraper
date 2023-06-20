@@ -6,22 +6,44 @@ from re import sub
 
 from os import mkdir, listdir
 from ebooklib import epub
-
+import logging
+import sys
 
 ## Importing original modules created for this project
 
 import modules.tableofcontents, modules.utils, modules.constants, modules.chapter
 
 
-def get_novel(toc_url, no_no_list = modules.constants.no_no_list, password = ''):
+################################ !Initializing logging module #################################
 
+log = logging.getLogger(__name__)
+log.setLevel(logging.DEBUG)
+
+formatter = logging.Formatter('%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s : %(funcName)s:%(lineno)d] \n %(message)s\n',
+	datefmt='%Y-%m-%d:%H:%M:%S')
+
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(formatter)
+console_handler.setLevel(logging.DEBUG)
+log.addHandler(console_handler)
+
+file_handler = logging.FileHandler('test.log')
+file_handler.setFormatter(formatter)
+file_handler.setLevel(logging.INFO)
+log.addHandler(file_handler)
+
+
+################################ !Functions #################################
+
+def get_novel(toc_url, password = ''):
+    log.info("Starting to get_novel...")
     ## Get novel info from toc with access_toc function (returns the info needed)
     try:
         novel_info = modules.tableofcontents.get_toc(toc_url, novelupdates_data = True, novelupdates_toc = input('Get novel TOC from novelupdates.com? Y/N\n'))
-        print('Retrieved novel info from TOC.')
+        log.info("TOC from novelupdates.com retrieved.")
 
     except:
-        return print('ERROR: Could not get novel info from TOC.')
+        logging.error(f'Could not retrieve novel info from {toc_url}.')
 
     ## Assign all values to their proper variables
     novel_filename  = novel_info[0]
@@ -38,53 +60,57 @@ def get_novel(toc_url, no_no_list = modules.constants.no_no_list, password = '')
     ## Does the directory for the novel exist? If not, create it.
     try:
         mkdir(backup_dir)
-        
+
     except FileExistsError:
-        print(f"Warning: Directory for {novel_title} already exists.")
+        log.warning(f" Directory for {novel_title} already exists.")
 
     ## Is the sub-directory for images created? If not, create it.
     try:
+
         mkdir(img_dir)
-        
+
     except FileExistsError:
-        print(f"Warning: Images folder for {novel_title} already exists.")
+        log.warning(f" Images folder for {novel_title} already exists.")
 
     chapter_filename_list = []
     chapter_filename = None
 
     ## Get chapters for each ch link
-    if 'chrysanthemum' in chapter_links[0]:
+    if 'chrysanthemum' in chapter_links[0] or 'knoxt' in chapter_links[0]:
         modules.utils.init_selenium(toc_url, javascript= False)
-        
     elif 'wattpad' in chapter_links[0]:
         modules.utils.init_selenium(toc_url, javascript= True)
-    
     else:
         pass
-    
+
+
     ## ! For each chapter link, get chapter, unless it contains twitter/facebook in url
+    
     for link in chapter_links:
         if 'twitter' in link or 'facebook' in link:
             break
-
+        elif link == '':
+            link_index = chapter_links.index(link)
+            logging.error(f' Encountered invalid chapter link at {link_index}. Skipping link.')
         else:
             chapter_filename = modules.chapter.get_chapter(link, driver, backup_dir, password)
 
             if chapter_filename not in chapter_filename_list:
                 chapter_filename_list.append(chapter_filename)
-                print(f'{chapter_filename} has been added.')
-
+                log.info(f"Chapter {chapter_filename} has been added.")
+                
+                
+    ## ! Get cover image and save it
     if novel_cover_url == '':
         pass
-
-    ## ! Get cover image and save it
     else:
         modules.utils.get_img(novel_cover_url, img_dir, img_description='cover_img')
 
-        print(f'Cover image saved to {img_dir}')
+        print(f' Cover image saved to {img_dir}')
 
     ## Save chapter filename list to saved file.
     with open(f'{backup_dir}chapter_filename_list.txt', 'w') as f:
+        log.info(f'Saving chapter filename list to {backup_dir}')
         f.write('\n'.join(chapter_filename_list))
 
     return [
@@ -95,6 +121,8 @@ def get_novel(toc_url, no_no_list = modules.constants.no_no_list, password = '')
 
 def create_ebook(novel_info, backup_dir, chapter_filename_list = None):
 
+    log.info("Creating Ebook...")
+
     novel_filename  = novel_info[0]
     novel_title     = novel_info[1]
     novel_author    = novel_info[2]
@@ -102,13 +130,14 @@ def create_ebook(novel_info, backup_dir, chapter_filename_list = None):
     novel_genres    = novel_info[4]
     novel_tags      = novel_info[5]
     novel_summary   = novel_info[6]
-    
+
     novel_tag_string = ', '.join(novel_tags)
 
     backup_dir = f"D:/python_projs/proj_save_the_danmei/Books/{novel_filename}/"
     img_dir = f"D:/python_projs/proj_save_the_danmei/Books/{novel_filename}/images/"
 
     if chapter_filename_list == None:
+        log.info("Chapter filename list not found. Opening .txt file.")
         ebook_chapter_list = []
         with open(f'{backup_dir}chapter_filename_list.txt', 'r') as f:
             for line in f:
@@ -118,7 +147,6 @@ def create_ebook(novel_info, backup_dir, chapter_filename_list = None):
 
                 # add current item to the list
                 ebook_chapter_list.append(x)
-
     else:
         ebook_chapter_list = chapter_filename_list
 
@@ -134,8 +162,9 @@ def create_ebook(novel_info, backup_dir, chapter_filename_list = None):
     book.add_author(novel_author, uid="Author")
 
     ## If there is a native-language version of the name, it's author alias.
-    if author_alias != '':
-        book.add_author(author_alias, uid="Author")
+    if author_alias != '' and author_alias != novel_author:
+        log.info(f"Author alias found. Adding {author_alias} as author alias.")
+        book.add_author(author_alias, role="Alias" ,uid="author_alias")
 
 
     print(f"Book Metadata added.")
@@ -143,21 +172,17 @@ def create_ebook(novel_info, backup_dir, chapter_filename_list = None):
     ## TODO: Create a google image scraper to find the book cover automatically. Safer is just searching novelupdates, but better results from google img.
     ## TODO: Build a UI that presents the image found and asks for approval before saving and applying to the novel epub.
 
-
-    
     ## create spine and toc variable
     spine = []
     toc_list = []
-    
+
     ## Set book cover
     with open( f'{img_dir}cover.jpg', "rb" ) as f:
         cover_image = f.read()
 
-    book.set_cover( file_name=f'cover.jpg', content=cover_image)
+    book.set_cover( file_name=f'cover.jpg', content=cover_image )
 
-    spine.append("cover.xhtml")
-
-    print(f'{img_dir}cover.jpg')
+    spine.append( "cover.xhtml" )
 
     ## create title page
     #titlepage = "<?xml version='1.0' encoding='utf-8'?><!DOCTYPE html>" + f'<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" epub:prefix="z3998: http://www.daisy.org/z3998/2012/vocab/structure/#" lang="en" xml:lang="en"><head><title>{novel_title}</title><link rel="stylesheet" href="stylesheet.css" type="text/css" /></head><div epub:type="frontmatter"><body><div class="title">{novel_title}</div><div>This ebook is compiled for educational purposes only and is not to be redistributed.</div><div>Title: {novel_title}</div><div>Author: {novel_author} {author_alias}</div><div class="cover"><h1 id="titlepage">{novel_title}</h1><h2>by {novel_author} {author_alias}</h2><p>Tags: {", ".join(novel_tags)}</p><img src="images/cover.jpg" alt = "cover_image"/></div></body></div></html>'
@@ -169,7 +194,8 @@ def create_ebook(novel_info, backup_dir, chapter_filename_list = None):
     title_page = book.add_item(epub.EpubItem(
         uid="title_page"
         ,file_name="titlepage.html"
-        ,content=titlepage_html, media_type="application/xhtml+xml"))
+        ,content=titlepage_html
+        ,media_type="application/xhtml+xml"))
 
     spine.append("title_page")
     toc_list.append("title_page")
@@ -181,8 +207,8 @@ def create_ebook(novel_info, backup_dir, chapter_filename_list = None):
 
     # add contents of chapter to book, spine, and TOC
     for i in chapter_filename_list:
-
         with open(f'{backup_dir}{i}.html', "r", encoding="utf-8") as f:
+            log.info("Reading chapter_filename_list file...")
             text = f.read()
             ch_content = text
 
@@ -192,8 +218,8 @@ def create_ebook(novel_info, backup_dir, chapter_filename_list = None):
             if chap_num == '':
                 chap_num = '0'
             new_chap_title = "Chapter " + chap_num
-
         except Exception:
+            log.debug("Exception encountered while retrieving chapter title/number.")
             pass
 
         ebook_chapter =\
@@ -215,6 +241,7 @@ def create_ebook(novel_info, backup_dir, chapter_filename_list = None):
         # load Image file
 
     for image_filename in listdir(img_dir):
+        log.info(f"Reading all files from {img_dir}.")
         image_filepath = f'{img_dir}{image_filename}'
 
         with open(f'{image_filepath}', "rb") as f:

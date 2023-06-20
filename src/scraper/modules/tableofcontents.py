@@ -2,28 +2,50 @@
 
 from lxml import etree
 from re import M, sub, search, compile
+import logging
+import sys
 
-####### internal imports
+####### internal imports #################################
 
 import modules.utils
 import modules.constants
 
+################################ !Initializing logging module #################################
 
-####### function
+log = logging.getLogger(__name__)
+log.setLevel(logging.DEBUG)
+
+formatter = logging.Formatter('%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s : %(funcName)s:%(lineno)d] \n %(message)s\n',
+	datefmt='%Y-%m-%d:%H:%M:%S')
+
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(formatter)
+console_handler.setLevel(logging.DEBUG)
+log.addHandler(console_handler)
+
+file_handler = logging.FileHandler('test.log')
+file_handler.setFormatter(formatter)
+file_handler.setLevel(logging.INFO)
+log.addHandler(file_handler)
+
+
+################################ !Functions #########################################
 
 def get_toc(url, novelupdates_data, novelupdates_toc, novelupdates_cover = True):
+    log.info(f"get_toc( url = {url}, novelupdates_data = {novelupdates_data}, novelupdates_toc = {novelupdates_toc}, novelupdates_cover = {novelupdates_cover}")
     try:
         print('trying to pull toc')
         ##test if pg can be pulled with requests, if not then try selenium?
 
         ##			write a test to see if you can use requests or selenium is needed
 
-        init_selenium = modules.utils.init_selenium(url)
+        if 'wattpad' in url or 'knoxt' in url:
+            javascript = True
+        else:
+            javascript = False
 
+        init_selenium = modules.utils.init_selenium(url, javascript)
         driver = init_selenium[0]
-
-        wait = init_selenium[1]
-
         toc_page_source = etree.HTML(driver.page_source)
 
         toc_synonyms = [
@@ -33,18 +55,19 @@ def get_toc(url, novelupdates_data, novelupdates_toc, novelupdates_cover = True)
             ,'Table-of-Contents'
             ]
 
-
         try:
             if 'wattpad' in url:
                 novel_website = 'Wattpad'
-
             else:
                 novel_website = toc_page_source.xpath('//meta[contains(@property, "site_name")]/@content')[0]
-
         except:
             novel_website = print(input("I can't figure out where this book is from? What website did you scrape it from?"))
 
+        log.info(f"Novel Website: {novel_website}")
+
+
         ## ! Novel Title
+        
         try:
             uncleaned_novel_title = toc_page_source.xpath('//title')[0].text
             
@@ -69,17 +92,18 @@ def get_toc(url, novelupdates_data, novelupdates_toc, novelupdates_cover = True)
 
         except:
             novel_title = print(input("I'm sorry. I can't find the title of this novel. What is the title?"))
+            
+            log.info(f"Novel title: {novel_title}.\nNovel Filename: {novel_filename}")
+
 
         ## ! Author's name
+        
         try:
-
-
             author_string = toc_page_source.xpath('//p[contains(text(), "Author")] | //p[contains(., "Author")]')[0].text
             
             if author_string == None and toc_page_source.xpath('//p[contains(., "Author")]//*')[0].text != None and toc_page_source.xpath('//p[contains(., "Author")]//*')[0].text != "Author’s Notes:":
                 author_string = toc_page_source.xpath('//p[contains(., "Author")]//*')[0].text
                 author_string = author_string.replace('Author:', '').strip()
-                
             elif author_string == None and toc_page_source.xpath('//p[contains(., "Author")]//*'):
                 for i in toc_page_source.xpath('//p[contains(., "Author")]//*'):
                     if i.text == None:
@@ -100,10 +124,10 @@ def get_toc(url, novelupdates_data, novelupdates_toc, novelupdates_cover = True)
                             
             if author_string != None and ("(" in author_string and ")" in author_string):
                 author_string = author_string.split("(")[0].strip()
-
+                
             novel_author = author_string
-
         except:
+            logging.error("Could not find novel author. Requesting manual entry.")
             novel_author = print(input("I'm sorry. I can't find the author's name. Who wrote this book?\n"))
 
         novel_cover_url = ''
@@ -113,17 +137,23 @@ def get_toc(url, novelupdates_data, novelupdates_toc, novelupdates_cover = True)
         novel_tags = []
         novel_summary = ''
 
+
         ## ! Novelupdates Data
+        
         if novelupdates_data == True:
+            log.info("Getting data from novelupdates...")
             novelupdates_returned = modules.utils.get_novelupdates_data(novel_title, get_cover = True, novelupdates_toc = novelupdates_toc)
-
             chapter_links = novelupdates_returned[0]
+            chapter_links_length = len(chapter_links)
+            log.info(f"Returned a list of {chapter_links_length} chapter links.")
             author_alias = novelupdates_returned[1]
+            log.info(f"Returned Author Alias: {author_alias}")
             novel_genres = novelupdates_returned[2]
+            log.info(f"Returned Novel Genres: {novel_genres}")
             novel_tags = novelupdates_returned[3]
+            log.info(f"Returned Novel Tags: {novel_tags}")
             novel_summary = novelupdates_returned[4]
-
-
+            log.info(f"Returned novel Summary: {novel_summary}")
         else:
             ## ! Novel Summary
             try:
@@ -163,19 +193,15 @@ def get_toc(url, novelupdates_data, novelupdates_toc, novelupdates_cover = True)
             chapter_links = novelupdates_returned[0]
 
         else:
-            #####
             ## ! Get chapter links
             # ## Get a list of chapter links by finding TOC elements and pulling all elements after that.
             if 'chrysanthemum' in novel_website.lower():
                 chapter_links = toc_page_source.xpath('//div[@class="chapter-item"]/a/@href')
-                
             elif 'wattpad' in novel_website.lower():
                 chapter_links = ["http://wattpad.com" + x for x in toc_page_source.xpath("//div[@class=\'story-parts\']//li/a/@href")]
-                
             elif 'knoxt' in novel_website.lower():
                 chapter_links = toc_page_source.xpath("//div[contains(@class, 'eplister')]//ul//li//a/@href")
                 chapter_links = list(reversed(chapter_links))
-            
             else:
                 try:
                     toc_title = toc_page_source.xpath('//*[@class="post-content"]//*[contains(., "Table of Contents") or contains(., "TOC") or contains(., "toc") or contains(., "Table-of-Contents") or contains(., "Table-of-contents")]')[0]

@@ -1,0 +1,7 @@
+test.log
+src/scraper/modules/__pycache__/chapter.cpython-310.pyc
+src/scraper/modules/__pycache__/compile.cpython-310.pyc
+src/scraper/modules/__pycache__/custom_logger_setup.cpython-310.pyc
+src/scraper/modules/__pycache__/custom_logging.cpython-310.pyc
+src/scraper/modules/__pycache__/tableofcontents.cpython-310.pyc
+src/scraper/modules/__pycache__/utils.cpython-310.pyc

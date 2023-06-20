@@ -11,15 +11,33 @@ from types import NoneType
 from requests_html import HTMLSession
 from time import time
 from unicodedata import normalize
-import faulthandler
-import signal
 import logging
+import sys
 
 ####### internal imports
 
 import modules.utils, modules.constants
 
-# ! Functions
+################################ !Initializing logging module #################################
+
+log = logging.getLogger(__name__)
+log.setLevel(logging.DEBUG)
+
+formatter = logging.Formatter('%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s : %(funcName)s:%(lineno)d] \n %(message)s\n',
+	datefmt='%Y-%m-%d:%H:%M:%S')
+
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(formatter)
+console_handler.setLevel(logging.DEBUG)
+log.addHandler(console_handler)
+
+file_handler = logging.FileHandler('test.log')
+file_handler.setFormatter(formatter)
+file_handler.setLevel(logging.INFO)
+log.addHandler(file_handler)
+
+
+################################ !Functions #####################################
 
 def get_chapter(url, driver=None, backup_dir=None, password=''):
 
@@ -31,52 +49,56 @@ def get_chapter(url, driver=None, backup_dir=None, password=''):
             if driver is None:
                 init_selenium = modules.utils.init_selenium(url)
                 driver = init_selenium[0]
-                wait = init_selenium[1]
+                chapter_etree = etree.HTML(driver.page_source)
 
+            elif 'knoxt' in url:
+                session = modules.utils.get_with_requests(url)
+                session_html = session.html.html
+                chapter_etree = etree.HTML(session_html)
             ## Else continue with the current instance of driver
             else:
                 unloaded = False
 
-                wait = WebDriverWait(driver, 10)
+                wait = WebDriverWait(driver, 30)
 
                 while unloaded is False:
                     try:
-                        #element = wait.until( EC.presence_of_element_located(( By.XPATH, "//div[@class='post-content']//p | //div[@id='novel-content']//p" )) )
-
+                        log.debug("Attempting unload of chapter page...")
+                        
                         ## If the url is a redirect, use requests-html to retrieve the end URL after redirect.
                         if 'novelupdates' in url:
                             r = HTMLSession.get(url)
                             url = r.url
                             driver.get(url)
-
                         else:
-                            driver.get(url)
-
+                            modules.utils.get_selenium(url, driver)
+                            
                         unloaded = True
 
                     except TimeoutException:
+                        log.error(f"Timeout Error while attempting unload of {url}. Refreshing...")
                         driver.refresh()
-                        print('Trying to reload page.')
+                chapter_etree = etree.HTML(driver.page_source)
             
-            chapter_etree = etree.HTML(driver.page_source)
             
             ## ! Check if site is locked
             if chapter_etree.xpath("//*[@id= 'site-pass']"):
                 driver = modules.utils.unlock_site(driver, password)
             
-            if driver.find_elements(By.XPATH, '/html/body/center/h1[.="502 Bad Gateway"]'):
-                print( f'ERROR: {url} encountered a bad gateway. Retrying the request.')
+            if chapter_etree.xpath('/html/body/center/h1[.="502 Bad Gateway"]'):
+                log.error( f'ERROR: {url} encountered a bad gateway. Retrying the request.')
                 driver.refresh()
-            
             elif 'knoxt' in url:
+                log.debug(f'Knoxt in url: {url}. Getting chapter name and title.')
                 chapter_title = chapter_etree.xpath("//div[@class='epheader']/h1/text() | //h1[@class='page-title']//text() | //header/h1[@class='h2']/text() | //*[@class = 'chapter-title']/text()")[0]
                 chapter_subtitle = chapter_etree.xpath("//div[@class='epheader']/div[@class='cat-series']/text()")
-            
             else:
+                log.debug("No specific website detected. Obtaining chapter title and subtitle.")
                 chapter_title = chapter_etree.xpath("//h1[@class='page-title']//text() | //header/h1[@class='h2']/text() | //*[@class = 'chapter-title']/text()")[0]
                 chapter_subtitle = ''
 
             if ":" in chapter_title:
+                log.debug(f"Cleaning chapter title.")
                 chapter_name_list = chapter_title.split(':')
 
                 for i in chapter_name_list:
@@ -87,16 +109,11 @@ def get_chapter(url, driver=None, backup_dir=None, password=''):
                         chapter_subtitle = i.replace('\n', '').strip()
 
             chapter_filename = sub(r'[^\w\&]', '_', chapter_title).replace('&', 'and').strip('_').lower()
-
-            chapter_elements = chapter_etree.xpath("//div[@class='post-content']//* | //div[@id='novel-content']//*")
-
-            if 'knoxt' in url:
-                chapter_elements = chapter_etree.xpath("//div[contains(@class, 'epcontent')]/p")
+            log.debug("Obtaining chapter_elements.")
+            chapter_elements = chapter_etree.xpath("//div[@class='post-content']//* | //div[@id='novel-content']//* | //div[contains(@class, 'epcontent')]/p")
 
             chapter_html_list = []
-
             chapter_html = ''
-
             footer = ''
             footer_content = []
             footnote_number = 00
@@ -110,6 +127,7 @@ def get_chapter(url, driver=None, backup_dir=None, password=''):
                 chapter_etree = etree.HTML(driver.page_source)
                 chapter_elements = chapter_etree.xpath('//div[contains(@class, "page")]//p')
 
+            log.debug("Beginning parse of chapter elements...")
             for element in chapter_elements:
                 element_content = ''
                 
@@ -139,7 +157,7 @@ def get_chapter(url, driver=None, backup_dir=None, password=''):
                                     except InvalidSelectorException:
                                         driver.find_element_by_xpath(f'//span[contains(., "{i.text}")]').click()
                                         
-                                    WebDriverWait(driver, 120).until(EC.element_to_be_clickable((By.XPATH, f'//div[@id="{tooltip_id}"]')))
+                                    wait.until(EC.element_to_be_clickable((By.XPATH, f'//div[@id="{tooltip_id}"]')))
                                     
                                     chapter_etree = etree.HTML(driver.page_source)
                                     
@@ -163,7 +181,7 @@ def get_chapter(url, driver=None, backup_dir=None, password=''):
                                 if i.tail is not None:
                                     element_content += i.tail
                                     
-                            elif i.get('style') == 'font-weight: 400':
+                            elif i.get('style') == 'font-weight: 400' and i.text not in modules.constants.no_no_list:
                                 element_content += i.text
 
                             if i.tail not in modules.constants.no_no_list:
@@ -221,7 +239,7 @@ def get_chapter(url, driver=None, backup_dir=None, password=''):
                     continue
 
         except TimeoutException:
-            logging.warning(f'Had to refresh url {url}')
+            log.warning(f'Had to refresh url {url}')
             try_again = True
             driver.refresh()
 

@@ -11,37 +11,57 @@ from webdriver_manager.firefox import GeckoDriverManager
 from requests_html import HTMLSession
 from re import sub
 import time
+
 import logging
+import sys
 
 
-# ! Logging setup
-logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s : %(funcName)s:%(lineno)d] %(message)s',
-    datefmt='%Y-%m-%d:%H:%M:%S',
-    level=logging.DEBUG)
+################################ ! Initializing logging module #################################
+
 log = logging.getLogger(__name__)
-log.addHandler(logging.NullHandler())
+log.setLevel(logging.DEBUG)
+
+formatter = logging.Formatter('%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s : %(funcName)s:%(lineno)d] \n %(message)s\n',
+	datefmt='%Y-%m-%d:%H:%M:%S')
+
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(formatter)
+console_handler.setLevel(logging.DEBUG)
+log.addHandler(console_handler)
+
+file_handler = logging.FileHandler('test.log')
+file_handler.setFormatter(formatter)
+file_handler.setLevel(logging.INFO)
+log.addHandler(file_handler)
 
 
-# ! Functions
+################################ ! Functions #################################
+
+def get_with_requests(url):
+    session = HTMLSession()
+    r = session.get(url)
+    return r
+    
+    
 def get_selenium(url, driver):
-    log.info("Getting %s with Selenium", url)
+    log.info(f"Getting {url} with Selenium")
     unloaded = False
 
     while unloaded is False:
         try:
             driver.get(url)
 
-            element = WebDriverWait(driver, 10).until(EC.presence_of_element_located(( By.CSS, "div.post-content" )))
+            element = WebDriverWait(driver, 10).until(EC.presence_of_all_elements_located(( By.CSS_SELECTOR, "div.post-content,div.epheader" )))
 
             unloaded = True
-            log.info("Loaded %(url)s successfully")
+            log.info(f"Loaded {url} successfully")
 
         except TimeoutException:
             log.error('Unable to load page content: attempting reload.')
             driver.refresh()
 
 def init_selenium(url, javascript = False):
-    log.info('Initializing selenium with url: %(url)s')
+    log.info(f'Initializing selenium with url: {url}')
     browser_header = {
         "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 \
         (KHTML, like Gecko) Chrome/44.0.2403.157 Safari/537.36",
@@ -64,10 +84,10 @@ def init_selenium(url, javascript = False):
     desired_dpi = 3.0
     options.add_experimental_option( "prefs",{'profile.managed_default_content_settings.javascript': 2} )
     ##options.add_argument(f"--force-device-scale-factor={desired_dpi}")
-    if 'wattpad' in url:
+    if 'wattpad' not in url and javascript is False:
         log.info("Disabling Javascript.")
         pass
-    else:
+    elif javascript is True:
         log.info("Enabling Javascript")
         options.add_experimental_option( "prefs",{'profile.managed_default_content_settings.javascript': 1} )
 
@@ -89,48 +109,42 @@ def init_firefox(url):
     return firefox_driver
 
 def get_img(img_url, img_directory, img_description=None):
-    log.info("Getting img from %(img_url)s")
+    log.info(f"Getting img from {img_url}")
 
     session = HTMLSession()
-
     src = session.get(img_url)
-
     img_filename = img_url.split('/')[-1].split('.')[0]
 
     if img_description == 'cover_img':
         img_filename = 'cover'
-
     else:
         pass
 
     img_path = ''.join([img_directory, img_filename, '.jpg'])
-
     save_file(src.content, img_path, write_mode = 'wb+', filetype='img')
-
-    ## TODO: add img filename to list of images.
-    ## TODO: insert html code for img into the chapter text.
-
     img_html = f'<img src="./images/{img_filename}.jpg" alt="{img_description}"></img>'
-
-    log.info("Retrieved %(img_filename)s. Returning img HTML.")
+    
+    log.info(f"Retrieved {img_filename}. Returning img HTML.")
+    
     return img_html
 
 def translate(text):
     pass # TODO: create translate function
 
 def scroll_down(driver, element_awaited_xpath):
+    log.info("Initializing scroll_down().")
     last_page = False
-
     while last_page is False:
         try:
             driver.find_element_by_xpath(element_awaited_xpath)
             last_page = True
-            
         except NoSuchElementException:
+            logging.error(f"{element_awaited_xpath} not found. Continuing scroll.")
             driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             time.sleep(3)
             
 def wattpad_scroll_down(driver):
+    log.info("Initializing wattpad_scroll_down().")
     item_presence = False
     while item_presence is False:
         ## last_window_height = driver.execute_script( "return document.body.scrollHeight" )
@@ -145,20 +159,24 @@ def wattpad_scroll_down(driver):
         time.sleep(1)
         
         if len(load_more) != 0 and "hidden" not in load_more[0].get("class"):
+            logging.error("Next Chapter button not found. Continuing scroll.")
             continue
         
         elif len(next_button) != 0 or len(driver.find_elements(By.XPATH, '//div[contains(@class, "last-page")]//pre//p')) > 0:
             if item_presence:
                 pass
             else:
+                log.info('Last page found. Ending scroll.')
                 item_presence = True
                 continue
             
         elif len(driver.find_elements(By.XPATH, '//div[@id="story-part-navigation"]/div[@class="message"]/div[@class="top-message"]')) > 0 and "🎉 You've finished reading " in driver.find_elements(By.XPATH, '//div[@id="story-part-navigation"]/div[@class="message"]/div[@class="top-message"]')[0].text:
+            log.info('Last page found. Ending scroll.')
             item_presence = True
             continue
 
 def open_file(path, read_method = 'r'):
+    log.debug('Opening file')
     if 'b' in read_method:
         with open(path, read_method) as f:
             return f.read()
@@ -168,6 +186,7 @@ def open_file(path, read_method = 'r'):
             return f.read()
 
 def save_file(data, path, write_mode = 'wb', encoding = None, filetype = 'text'):
+    log.debug('Saving file')
     if filetype == 'text':
         encoding = 'utf8'
         with open(path, write_mode, encoding= encoding) as f:
@@ -212,29 +231,22 @@ def chrysanthemum_descramble_text(cipher):
     return plain
 
 def unlock_site(driver, password):
-            password_input = driver.find_element("id", "site-pass")
-            password_input.send_keys(password)
+    log.info("Password encountered. Unlocking site with %(funcName)s...")
+    password_input = driver.find_element("id", "site-pass")
+    password_input.send_keys(password)
 
-            driver.find_element("id", "password-lock").submit()
+    driver.find_element("id", "password-lock").submit()
 
-            WebDriverWait(driver, 10).until(
-                EC.visibility_of_element_located(
-                    (By.XPATH, "//div[@id='novel-content']")
-                )
-            )
-            
-def logging_module():
-
-    
-    def func():
-        log.critical('A Critical Error!')
-        log.debug('A Debug Error!')
+    WebDriverWait(driver, 10).until(
+        EC.visibility_of_element_located(
+            (By.XPATH, "//div[@id='novel-content']")
+        )
+    )
             
 def get_novelupdates_data(novel_title, get_cover = True, novelupdates_toc = True):
+    log.info("Getting info from Novelupdates.")
     session = HTMLSession()
-
     search_query = sub(r'[^\w ]', '', novel_title).strip().replace(' ', '-').lower()
-
     r = session.get(f'https://www.novelupdates.com/series/{search_query}')
 
     if get_cover:
@@ -242,8 +254,8 @@ def get_novelupdates_data(novel_title, get_cover = True, novelupdates_toc = True
             novel_cover_url = r.html.xpath('//*[@class="wpb_text_column"]//img/@src')[0]
 
         except IndexError:
+            log.debug(exec_info=1)
             novel_cover_url = r.html.xpath('//*[@class="seriesimg"]//img/@src')[0]
-
     else:
         novel_cover_url = ''
 
@@ -257,13 +269,12 @@ def get_novelupdates_data(novel_title, get_cover = True, novelupdates_toc = True
     novel_toc = []
 
     if novelupdates_toc == True:
-
         ## ! Pagination for TOC
+        log.debug('Getting novelupdates information...')
         last_pagination_link = r.html.xpath('//div[contains(@class, "digg_pagination")]/a[3]/@href', first=True)
 
         if 'novelupdates.com' in last_pagination_link:
             pagination_query = last_pagination_link.replace(f'https://www.novelupdates.com/series/{search_query}/', '')
-
         else:
             pagination_query = last_pagination_link[2:]
 
@@ -278,6 +289,7 @@ def get_novelupdates_data(novel_title, get_cover = True, novelupdates_toc = True
             chapter_links.append(r.url)
 
         ## ! handle redirects for automating pagination
+        log.debug('Handling redirect for automating pagination.')
         for page_num in range(int(num_of_paginated_pages)+1):
             unredirected_chapter_links = []
             r = session.get(f'https://www.novelupdates.com/series/{search_query}/?pg={page_num}#myTable')
@@ -288,6 +300,7 @@ def get_novelupdates_data(novel_title, get_cover = True, novelupdates_toc = True
                 chapter_links.append(r.url)
 
         ## ! Check if list is in order
+        log.debug('Checking to see if list is in order.')
         if sorted(chapter_titles) == chapter_titles:
             pass
         else:
