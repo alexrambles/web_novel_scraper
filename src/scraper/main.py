@@ -2,15 +2,11 @@
 
 ##fn to pull toc (return list of urls)
 
-##3 methods of iterating thru urls: pull from novelupdates, pull from website toc, or click "next" button
+##3 methods of iterating thru urls: [pull from novelupdates, pull from website toc, or click "next" button
 
 ##when it comes to scraping the actual chapter body text, there are a few websites that will require extra help. CG, Flying Lines, Google Docs, and Wattpad are some of them.
 
-##start by building the simplest utility functions. Scroll to bottom of page. Get rid of cookies box.
-
-##wattpad--hold down pgdown key until class last-page appears
-
-##make a list of possible "next page" synonyms
+##make a list of possible "next page" synonyms ( or utilize the next pagination support in requests-html)
 
 ##after the first page is scraped, if the next url results in a 404 error, switch scraping methods. Maybe reload previous url and switch to press next button method.
 

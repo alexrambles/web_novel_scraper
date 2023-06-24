@@ -1,10 +1,10 @@
+from lxml import etree
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
-from selenium.webdriver.common.action_chains import ActionChains
+from selenium.common.exceptions import TimeoutException, InvalidSelectorException, ElementClickInterceptedException, NoSuchElementException
 from webdriver_manager.chrome import ChromeDriverManager
 from webdriver_manager.firefox import GeckoDriverManager
 
@@ -14,6 +14,8 @@ import time
 
 import logging
 import sys
+
+import modules.constants
 
 
 ################################ ! Initializing logging module #################################
@@ -40,8 +42,7 @@ log.addHandler(file_handler)
 def get_with_requests(url):
     session = HTMLSession()
     r = session.get(url)
-    return r
-    
+    return r    
     
 def get_selenium(url, driver):
     log.info(f"Getting {url} with Selenium")
@@ -51,7 +52,7 @@ def get_selenium(url, driver):
         try:
             driver.get(url)
 
-            element = WebDriverWait(driver, 10).until(EC.presence_of_all_elements_located(( By.CSS_SELECTOR, "div.post-content,div.epheader" )))
+            element = WebDriverWait(driver, 30).until(EC.presence_of_element_located(( By.XPATH, "//div[@class='post-content'] | //div[contains(@class, 'entry-content')] | //div[@class='epheader'] | //*[contains(., 'Sensitive Content Warning')]" )))
 
             unloaded = True
             log.info(f"Loaded {url} successfully")
@@ -175,6 +176,7 @@ def wattpad_scroll_down(driver):
             item_presence = True
             continue
 
+
 def open_file(path, read_method = 'r'):
     log.debug('Opening file')
     if 'b' in read_method:
@@ -185,6 +187,7 @@ def open_file(path, read_method = 'r'):
         with open(path, read_method, encoding) as f:
             return f.read()
 
+
 def save_file(data, path, write_mode = 'wb', encoding = None, filetype = 'text'):
     log.debug('Saving file')
     if filetype == 'text':
@@ -194,6 +197,7 @@ def save_file(data, path, write_mode = 'wb', encoding = None, filetype = 'text')
     elif filetype == 'img':
         with open(path, write_mode) as f:
             f.write(data)
+
             
 def chrysanthemum_descramble_text(cipher):
     cipher = str(cipher)
@@ -230,18 +234,187 @@ def chrysanthemum_descramble_text(cipher):
 
     return plain
 
-def unlock_site(driver, password):
-    log.info("Password encountered. Unlocking site with %(funcName)s...")
-    password_input = driver.find_element("id", "site-pass")
-    password_input.send_keys(password)
 
-    driver.find_element("id", "password-lock").submit()
+def unlock_site(driver, chapter_etree, password):
+    if chapter_etree.cssselect("#site-pass"):
+        log.info("Password encountered. Unlocking site with %(funcName)s...")
+        password_input = driver.find_element("id", "site-pass")
+        password_input.send_keys(password)
 
-    WebDriverWait(driver, 10).until(
-        EC.visibility_of_element_located(
-            (By.XPATH, "//div[@id='novel-content']")
+        driver.find_element("id", "password-lock").submit()
+
+        WebDriverWait(driver, 10).until(
+            EC.visibility_of_element_located(
+                (By.XPATH, "//div[@id='novel-content']")
+            )
         )
-    )
+        return driver
+    else:
+        return driver
+
+        
+def get_chapter_info(driver, chapter_etree, url):
+    if chapter_etree.cssselect('h1:contains("502 Bad Gateway")'):
+        log.error( f'ERROR: {url} encountered a bad gateway. Retrying the request.')
+        driver.refresh()
+    elif 'knoxt' in url:
+        log.info(f'Knoxt in url: {url}. Getting chapter name and title.')
+        chapter_title = chapter_etree.cssselect("div.epheader h1, h1.page-title, header h1.h2, .chapter-title")[0].text
+        chapter_subtitle = chapter_etree.cssselect("div.epheader div.cat-series")[0].text
+    else:
+        log.debug("No specific website detected. Obtaining chapter title and subtitle.")
+        chapter_title_element = chapter_etree.cssselect("h1.page-title, header h1.h2, .chapter-title, meta[property='og:title']")[0]
+        chapter_title = chapter_title_element.text.strip() if chapter_title_element is not None and chapter_title_element.text is not None else chapter_title_element.attrib['content']
+        chapter_subtitle = ''
+
+    # Cleanup chapter title in case it includes a reference to novel title.
+    if ":" in chapter_title:
+        log.info(f"Cleaning chapter title.")
+        chapter_name_list = chapter_title.split(':')
+
+        for chapter_name in chapter_name_list:
+            if "chapter" in chapter_name.lower():
+                chapter_title = chapter_name.replace('\n', '').strip()
+
+            elif len(chapter_name) >5:
+                chapter_subtitle = chapter_name.replace('\n', '').strip()
+
+    chapter_filename = sub(r'[^\w\&]', '_', chapter_title).replace('&', 'and').strip('_').lower()
+    chapter_info = [chapter_title, chapter_subtitle, chapter_filename]
+
+    return chapter_info
+
+
+def append_p_or_span(driver, wait, chapter_etree, current_element, chapter_html_list, element_content, footer_content):
+    if current_element.cssselect(':has(em), :has(strong), :has(sup), :has(i), :has(b), :has(span)'):
+        if current_element.text is not None and current_element.text not in modules.constants.no_no_list:
+            element_content += current_element.text
+
+        for current_sub_element in current_element.cssselect('*'):
+            if current_sub_element in current_element.cssselect('span.tooltip-toggle'):
+                footnote_number += 1
+                tooltip_id = current_element.attrib['tooltip-target']
+                element_content += f'{element_content}<a epub:type="noteref" href="#{tooltip_id}" id="fn{footnote_number}">{current_element.text}</a>'
+
+                if current_element.tail is not None:
+                    element_content += f'{element_content}{current_element.tail}'
+
+                if not driver.find_elements_by_id(tooltip_id):
+                    try:
+                        driver.find_element_by_css_selector(f'span:contains("{current_element.text}")').click()
+
+                    except ElementClickInterceptedException:
+                        driver.find_element_by_css_selector('.cookie-consent button').click()
+                        driver.find_element_by_css_selector(f'span:contains("{current_element.text}")').click()
+                        driver.implicitly_wait(1)
+
+                    except InvalidSelectorException:
+                        driver.find_element_by_css_selector(f'span:contains("{current_element.text}")').click()
+
+                    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, f'div[id="{tooltip_id}"]')))
+                    chapter_etree = etree.HTML(driver.page_source)
+
+                # TODO: Can we take out the 'Translator's Note' bit and put the actual text being explained instead?
+                tooltip_p = chapter_etree.cssselect(f'div[id="{tooltip_id}"] > *')[0]
+                tooltip = f'<p><a href="#fn{footnote_number}" id="{tooltip_id}"><strong>{current_sub_element.text}</strong></a> -- {tooltip_p.tail}</p>'
+                footer_content.append(f'<div epub:type="footnote" class="tooltip">{tooltip}</div>')
+
+            elif current_sub_element in current_element.cssselect('span[style="text-decoration: underline"]'):
+                element_content += f'<u>{current_sub_element.text}</u>'
+
+            elif current_sub_element.get('role') == 'tooltip':
+                tooltip = f'<a href = "#fn{footnote_number}" id="footnote{footnote_number}">{footnote_number}</a> -- {current_sub_element.text}'
+                footer_content.append(f'<div epub:type="footnote" class="tooltip">{tooltip}</div>')
+
+            elif current_sub_element.tag == 'sup' and len(current_sub_element.attrib) != 0:
+                footnote_number += 1
+                current_sub_element_content = current_sub_element.cssselect('a')[0].text
+                element_content += f'<sup><a epub:type = "noteref" href="#footnote{footnote_number}" id="fn{footnote_number}">{current_sub_element_content}</a></sup>'
+
+                if current_sub_element.tail is not None:
+                    element_content += current_sub_element.tail
+
+            elif current_sub_element.text not in modules.constants.no_no_list:
+                if current_sub_element.get('style') is not None and ('font-weight: 400' in current_sub_element.get('style') or 'mso-fareast-font-family:' in current_sub_element.get('style')):
+                    element_content += f'<p>{current_sub_element.text}</p>'
+
+                elif 'face' in current_sub_element.attrib:
+                    element_content += f'<p>{current_sub_element.text}</p>'
+
+            if current_sub_element.tail not in modules.constants.no_no_list and current_sub_element.tag != 'span':
+                if element_content[-len(current_sub_element.tag) + 1:] == f'{current_sub_element.tag}>':
+                    element_content = element_content[:-len(current_sub_element.tag) - 1]
+                    element_content += f'{current_sub_element.text}</{current_sub_element.tag}>{current_sub_element.tail}'
+
+                elif current_sub_element.text not in modules.constants.no_no_list and current_sub_element.text not in '\t'.join(footer_content):
+                    element_content += f' <{current_sub_element.tag}>{current_sub_element.text}</{current_sub_element.tag}>{current_sub_element.tail}'
+
+                else:
+                    element_content = f'{element_content}{current_sub_element.tail}'
+            else:
+                if element_content[-len(current_sub_element.tag) + 1:] == f'{current_sub_element.tag}>':
+                    element_content = element_content[:-len(current_sub_element.tag) - 1]
+                    element_content += f'{current_sub_element.text}</{current_sub_element.tag}>'
+
+                elif 'face' in i.attrib and current_sub_element.tag == 'span' and current_sub_element.text is not None and current_sub_element.text not in element_content:
+                    if i.getparent().tag == 'i' and element_content[-4:] == '</i>':
+                        chapter_html_list[:-4].append(f' {current_sub_element.text}</i>')
+
+                    else:
+                        chapter_html_list.append(f'<p>{current_sub_element.text}</p>')
+
+                elif current_sub_element.text not in modules.constants.no_no_list and current_sub_element.text not in element_content and (current_sub_element.text is not None or current_sub_element.tail is not None):
+                    element_content += f' <{current_sub_element.tag}>{current_sub_element.text}</{current_sub_element.tag}>'
+
+        if element_content not in footer_content and current_element.tail is not None and current_element.tail not in modules.constants.no_no_list:
+            element_content = f'{element_content}{current_element.tail}</p>'
+
+    elif current_element.text is not None and current_element.text not in modules.constants.no_no_list:
+        element_content = current_element.text
+
+    if element_content is None:
+        pass
+
+    elif element_content not in chapter_html_list and element_content not in modules.constants.no_no_list:
+        chapter_html_list.append(f'<p>{element_content}</p>')
+
+    return chapter_html_list
+
+
+def create_chapter_html_file(chapter_html_list, footer_content, backup_dir, chapter_filename):
+    try:
+        if len(chapter_html_list) < 10 and len(' '.join(chapter_html_list)) < 100:
+            raise Exception('Wait--this chapter is too short. Something is wrong. Please check the chapter_html_list.')
+
+    except Exception:
+        pass
+
+    chapter_text = ''.join(chapter_html_list)
+
+    chapter_text = chapter_text.replace('.\n', '</p><p>')
+
+    if footer_content != []:
+        footer = f'<div id="footer" class = "footer">{"<br>".join(footer_content)}</div>'
+
+    chapter_html = f'<article id="{chapter_filename}_body">{chapter_text}</article>'
+    chapter_html = f'<!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang = "en" xml:lang="en"><head><title style="display:none;">{chapter_title}</title></head><body epub:type="chapter"><div epub:type="bodymatter"><div><h1 epub:type="title" id="{chapter_filename}">{chapter_title}</h1><h2 epub:type="subtitle">{chapter_subtitle}</h2>{chapter_html}</div>{footer}</div></body></html>'
+    modules.utils.save_file(chapter_html, f'{backup_dir}{chapter_filename}.html', write_mode='w+')
+
+
+def append_a_element(current_element, chapter_html_list, img_dir):
+    if current_element.get('href') is not None and current_element.get('href')[-4:] in modules.constants.img_suffixes:
+        if current_element.cssselect('*[contains(@*, "description")]'):
+            img_description = current_element.cssselect('@*[contains(., "description")]')[0].text
+            img_html = get_img(current_element.get('href'), img_dir, img_description)
+            chapter_html_list.append(img_html)
+        else:
+            img_html = get_img(current_element.get('href'), img_dir)
+            chapter_html_list.append(img_html)
+    else:
+        pass
+
+    return chapter_html_list
+
             
 def get_novelupdates_data(novel_title, get_cover = True, novelupdates_toc = True):
     log.info("Getting info from Novelupdates.")
@@ -319,27 +492,11 @@ def get_novelupdates_data(novel_title, get_cover = True, novelupdates_toc = True
     ,novel_cover_url
     ]
 
-##    book.add_metadata("DC", "description", novel_summary)
-##    for i in novel_tags:
-##        book.add_metadata("DC", "subject", i)
-##    print("Metadata added.")
-
 ##TODO - create functions:
 
-####def scroll_to_bottom():
 
 ####def click_next_button():
-
-####def hold_pgdwn():
-
-####def close_footer_ad(xpath):
-
-####def decode_text(text, cipher):
-
-####def get_spine(url):
 
 ####def scrape_ch():
 
 ####def parse_ch(path):
-
-####def login(url,):

@@ -66,7 +66,6 @@ def get_novel(toc_url, password = ''):
 
     ## Is the sub-directory for images created? If not, create it.
     try:
-
         mkdir(img_dir)
 
     except FileExistsError:
