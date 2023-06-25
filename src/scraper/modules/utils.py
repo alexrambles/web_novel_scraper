@@ -18,23 +18,29 @@ import sys
 import modules.constants
 
 
-################################ ! Initializing logging module #################################
+################################ Creating logging module #################################
 
-log = logging.getLogger(__name__)
-log.setLevel(logging.DEBUG)
+def setup_logging():
+    log = logging.getLogger(__name__)
+    log.setLevel(logging.DEBUG)
 
-formatter = logging.Formatter('%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s : %(funcName)s:%(lineno)d] \n %(message)s\n',
-	datefmt='%Y-%m-%d:%H:%M:%S')
+    formatter = logging.Formatter('%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s : %(funcName)s:%(lineno)d] \n %(message)s\n',
+        datefmt='%Y-%m-%d:%H:%M:%S')
 
-console_handler = logging.StreamHandler(sys.stdout)
-console_handler.setFormatter(formatter)
-console_handler.setLevel(logging.DEBUG)
-log.addHandler(console_handler)
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+    console_handler.setLevel(logging.DEBUG)
+    log.addHandler(console_handler)
 
-file_handler = logging.FileHandler('test.log')
-file_handler.setFormatter(formatter)
-file_handler.setLevel(logging.INFO)
-log.addHandler(file_handler)
+    file_handler = logging.FileHandler('test.log')
+    file_handler.setFormatter(formatter)
+    file_handler.setLevel(logging.INFO)
+    log.addHandler(file_handler)
+
+    return log
+
+## Initializing logging
+log = setup_logging()
 
 
 ################################ ! Functions #################################
@@ -45,6 +51,7 @@ def get_with_requests(url):
     return r    
     
 def get_selenium(url, driver):
+    quit_loop = False
     log.info(f"Getting {url} with Selenium")
     unloaded = False
 
@@ -52,14 +59,20 @@ def get_selenium(url, driver):
         try:
             driver.get(url)
 
-            element = WebDriverWait(driver, 30).until(EC.presence_of_element_located(( By.XPATH, "//div[@class='post-content'] | //div[contains(@class, 'entry-content')] | //div[@class='epheader'] | //*[contains(., 'Sensitive Content Warning')]" )))
+            element = WebDriverWait(driver, 30).until(EC.presence_of_element_located(( By.XPATH, "//div[contains(@class, 'first-page')] | //div[@class='post-content'] | //div[contains(@class, 'entry-content')] | //div[@class='epheader'] | //*[contains(., 'Sensitive Content Warning')]" )))
 
             unloaded = True
             log.info(f"Loaded {url} successfully")
 
         except TimeoutException:
-            log.error('Unable to load page content: attempting reload.')
-            driver.refresh()
+            if driver.find_elements(By.CSS_SELECTOR, 'section.error-404'):
+                quit_loop = True
+                break
+                
+            else:
+                log.error('Unable to load page content: attempting reload.')
+                driver.refresh()
+    return quit_loop
 
 def init_selenium(url, javascript = False):
     log.info(f'Initializing selenium with url: {url}')
@@ -263,7 +276,7 @@ def get_chapter_info(driver, chapter_etree, url):
         chapter_subtitle = chapter_etree.cssselect("div.epheader div.cat-series")[0].text
     else:
         log.debug("No specific website detected. Obtaining chapter title and subtitle.")
-        chapter_title_element = chapter_etree.cssselect("h1.page-title, header h1.h2, .chapter-title, meta[property='og:title']")[0]
+        chapter_title_element = chapter_etree.cssselect("h1.page-title, header h1.h2, header h3, *.chapter-title, meta[property='og:title']")[0]
         chapter_title = chapter_title_element.text.strip() if chapter_title_element is not None and chapter_title_element.text is not None else chapter_title_element.attrib['content']
         chapter_subtitle = ''
 
@@ -356,7 +369,7 @@ def append_p_or_span(driver, wait, chapter_etree, current_element, chapter_html_
                     element_content = element_content[:-len(current_sub_element.tag) - 1]
                     element_content += f'{current_sub_element.text}</{current_sub_element.tag}>'
 
-                elif 'face' in i.attrib and current_sub_element.tag == 'span' and current_sub_element.text is not None and current_sub_element.text not in element_content:
+                elif 'face' in current_sub_element.attrib and current_sub_element.tag == 'span' and current_sub_element.text not in modules.constants.no_no_list and current_sub_element.text not in element_content:
                     if i.getparent().tag == 'i' and element_content[-4:] == '</i>':
                         chapter_html_list[:-4].append(f' {current_sub_element.text}</i>')
 
@@ -381,7 +394,7 @@ def append_p_or_span(driver, wait, chapter_etree, current_element, chapter_html_
     return chapter_html_list
 
 
-def create_chapter_html_file(chapter_html_list, footer_content, backup_dir, chapter_filename):
+def create_chapter_html_file(chapter_html_list, chapter_title, chapter_subtitle, footer_content, backup_dir, chapter_filename):
     try:
         if len(chapter_html_list) < 10 and len(' '.join(chapter_html_list)) < 100:
             raise Exception('Wait--this chapter is too short. Something is wrong. Please check the chapter_html_list.')
@@ -395,6 +408,8 @@ def create_chapter_html_file(chapter_html_list, footer_content, backup_dir, chap
 
     if footer_content != []:
         footer = f'<div id="footer" class = "footer">{"<br>".join(footer_content)}</div>'
+    else:
+        footer = ''
 
     chapter_html = f'<article id="{chapter_filename}_body">{chapter_text}</article>'
     chapter_html = f'<!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang = "en" xml:lang="en"><head><title style="display:none;">{chapter_title}</title></head><body epub:type="chapter"><div epub:type="bodymatter"><div><h1 epub:type="title" id="{chapter_filename}">{chapter_title}</h1><h2 epub:type="subtitle">{chapter_subtitle}</h2>{chapter_html}</div>{footer}</div></body></html>'

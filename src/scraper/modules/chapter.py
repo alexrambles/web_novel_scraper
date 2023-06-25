@@ -20,34 +20,15 @@ import modules.constants
 
 ################################ !Initializing logging module #################################
 
-def setup_logging():
-    log = logging.getLogger(__name__)
-    log.setLevel(logging.DEBUG)
-
-    formatter = logging.Formatter('%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s : %(funcName)s:%(lineno)d] \n %(message)s\n',
-        datefmt='%Y-%m-%d:%H:%M:%S')
-
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(formatter)
-    console_handler.setLevel(logging.DEBUG)
-    log.addHandler(console_handler)
-
-    file_handler = logging.FileHandler('test.log')
-    file_handler.setFormatter(formatter)
-    file_handler.setLevel(logging.INFO)
-    log.addHandler(file_handler)
-
-    return log
-
 
 ################################ !Functions #####################################
 
 ## TODO: Add docstring
-def get_chapter(url, driver=None, backup_dir=None, password=''):
-    log = setup_logging()
+def get_chapter(url, driver=None, backup_dir=None, password='', log=''):
     wait = WebDriverWait(driver, 30)
 
     try_again = True
+    quit_loop = False
     while try_again:
         try:
             try_again = False
@@ -61,6 +42,10 @@ def get_chapter(url, driver=None, backup_dir=None, password=''):
                 session = modules.utils.get_with_requests(url)
                 session_html = session.html.html
                 chapter_etree = etree.HTML(session_html)
+
+            elif 'wattpad' in url:
+                driver.get(url)
+                chapter_etree = etree.HTML(driver.page_source)
 
             ## Else continue with the current instance of driver
             else:
@@ -81,13 +66,19 @@ def get_chapter(url, driver=None, backup_dir=None, password=''):
                             wait.until(EC.presence_of_element_located(By.XPATH, '//div[@class="post"]/div/p'))
 
                         else:
-                            modules.utils.get_selenium(url, driver)
+                            quit_loop = modules.utils.get_selenium(url, driver)
+                            if quit_loop:
+                                break
 
                         unloaded = True
 
                     except TimeoutException:
                         log.error(f"Timeout Error while attempting unload of {url}. Refreshing...")
                         driver.refresh()
+                        
+                if quit_loop:
+                    break
+                
                 site_body = driver.find_element(By.CSS_SELECTOR, "div.post-body, div.entry-content, div#novel-content, div.epcontent")
                 chapter_etree = etree.HTML(driver.page_source)
                 content_body = etree.HTML(site_body.get_attribute("innerHTML"))
@@ -104,7 +95,13 @@ def get_chapter(url, driver=None, backup_dir=None, password=''):
 
             # Get chapter_elements
             log.info("Obtaining chapter_elements.")
-            chapter_elements = content_body.cssselect("p")
+
+            if 'wattpad' in url:
+                modules.utils.wattpad_scroll_down(driver)
+                chapter_etree = etree.HTML(driver.page_source)
+                chapter_elements = chapter_etree.cssselect("div.page p")
+            else:
+                chapter_elements = content_body.cssselect("p")
             
             ## Creating empty variables
             chapter_html_list = []
@@ -115,11 +112,7 @@ def get_chapter(url, driver=None, backup_dir=None, password=''):
             # create backup_directory
             if backup_dir is not None:
                 img_dir = f'{backup_dir}images/'
-
-            if 'wattpad' in url:
-                modules.utils.wattpad_scroll_down(driver)
-                chapter_etree = etree.HTML(driver.page_source)
-                chapter_elements = chapter_etree.cssselect("div.page p")
+            
 
             log.debug("Beginning parse of chapter elements...")
             for current_element in chapter_elements:
@@ -156,7 +149,14 @@ def get_chapter(url, driver=None, backup_dir=None, password=''):
                 
             try_again = True
 
-    # Creates and saves the html for the chapter.
-    modules.utils.create_chapter_html_file(chapter_html_list, footer_content, backup_dir, chapter_filename)
+        if quit_loop:
+            break
 
-    return chapter_filename
+    if quit_loop:
+        pass
+
+    else:
+        # Creates and saves the html for the chapter.
+        modules.utils.create_chapter_html_file(chapter_html_list, chapter_title, chapter_subtitle, footer_content, backup_dir, chapter_filename)
+
+        return chapter_filename

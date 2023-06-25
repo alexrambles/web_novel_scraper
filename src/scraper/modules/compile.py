@@ -92,9 +92,9 @@ def get_novel(toc_url, password = ''):
             link_index = chapter_links.index(link)
             logging.error(f' Encountered invalid chapter link at {link_index}. Skipping link.')
         else:
-            chapter_filename = modules.chapter.get_chapter(link, driver, backup_dir, password)
+            chapter_filename = modules.chapter.get_chapter(link, driver, backup_dir, password, log = log)
 
-            if chapter_filename not in chapter_filename_list:
+            if chapter_filename not in chapter_filename_list and chapter_filename != None:
                 chapter_filename_list.append(chapter_filename)
                 log.info(f"Chapter {chapter_filename} has been added.")
                 
