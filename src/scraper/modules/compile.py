@@ -203,11 +203,12 @@ def create_ebook(novel_info, backup_dir, chapter_filename_list = None):
 
     spine.append("nav")
 
-
+    log.info("Reading chapter_filename_list file...")
+    
     # add contents of chapter to book, spine, and TOC
     for i in chapter_filename_list:
         with open(f'{backup_dir}{i}.html', "r", encoding="utf-8") as f:
-            log.info("Reading chapter_filename_list file...")
+            
             text = f.read()
             ch_content = text
 
