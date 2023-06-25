@@ -370,7 +370,7 @@ def append_p_or_span(driver, wait, chapter_etree, current_element, chapter_html_
                     element_content += f'{current_sub_element.text}</{current_sub_element.tag}>'
 
                 elif 'face' in current_sub_element.attrib and current_sub_element.tag == 'span' and current_sub_element.text not in modules.constants.no_no_list and current_sub_element.text not in element_content:
-                    if i.getparent().tag == 'i' and element_content[-4:] == '</i>':
+                    if current_sub_element.getparent().tag == 'i' and element_content[-4:] == '</i>':
                         chapter_html_list[:-4].append(f' {current_sub_element.text}</i>')
 
                     else:
