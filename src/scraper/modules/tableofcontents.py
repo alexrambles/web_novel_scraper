@@ -11,8 +11,8 @@ from requests_html import HTMLSession
 
 ####### Local Imports #######
 
-import modules.utils
-import modules.constants
+from . import utils
+from . import constants
 
 ################################ !Initializing logging module #################################
 
@@ -51,7 +51,7 @@ def get_toc(url, novelupdates_data, novelupdates_toc, novelupdates_cover = True)
             javascript = False
 
         if 'novelupdates' in url:
-            driver = modules.utils.init_selenium(url)[0]
+            driver = utils.init_selenium(url)[0]
             session = HTMLSession()
             r = session.get(url)
             log.debug('Pulling all information from Novelupdates...')
@@ -102,7 +102,7 @@ def get_toc(url, novelupdates_data, novelupdates_toc, novelupdates_cover = True)
                 ## reverse the list to be in numerical order
                 chapter_links.reverse()
         else:
-            init_selenium = modules.utils.init_selenium(url, javascript)
+            init_selenium = utils.init_selenium(url, javascript)
             driver = init_selenium[0]
             toc_page_source = etree.HTML(driver.page_source)
 
@@ -138,7 +138,7 @@ def get_toc(url, novelupdates_data, novelupdates_toc, novelupdates_cover = True)
                     for word in toc_synonyms:
                         uncleaned_novel_title = uncleaned_novel_title.replace(word, '')
 
-                    novel_title = uncleaned_novel_title.replace('[\-]', '').strip()
+                    novel_title = uncleaned_novel_title.replace(r'[-]', '').strip()
 
                 if novel_website in uncleaned_novel_title and novel_website != 'Wattpad':
                     novel_title = uncleaned_novel_title.replace(novel_website, '').replace('-', '').strip()
@@ -176,7 +176,7 @@ def get_toc(url, novelupdates_data, novelupdates_toc, novelupdates_cover = True)
                                     sub(r'\p{Han}', '', author_string_raw).strip()
                                     
                                     if '(' in author_string_raw:
-                                        sub('\(\)', '', author_string_raw).strip()
+                                        sub(r'\(\)', '', author_string_raw).strip()
                                         
                                 author_string = author_string_raw
                                 
@@ -201,7 +201,7 @@ def get_toc(url, novelupdates_data, novelupdates_toc, novelupdates_cover = True)
             
             if novelupdates_data == True:
                 log.info("Getting data from novelupdates...")
-                novelupdates_returned = modules.utils.get_novelupdates_data(novel_title, get_cover = True, novelupdates_toc = novelupdates_toc)
+                novelupdates_returned = utils.get_novelupdates_data(novel_title, get_cover = True, novelupdates_toc = novelupdates_toc)
                 chapter_links = novelupdates_returned[0]
                 chapter_links_length = len(chapter_links)
                 log.info(f"Returned a list of {chapter_links_length} chapter links.")
@@ -226,7 +226,7 @@ def get_toc(url, novelupdates_data, novelupdates_toc, novelupdates_cover = True)
                         summary_text_list = []
                         
                         for i in synopsis_list:
-                            if i.tag == 'p' and i.text not in modules.constants.no_no_list:
+                            if i.tag == 'p' and i.text not in constants.no_no_list:
                                 try:
                                     summary_text_list.append(i.text)
                                     

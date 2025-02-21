@@ -4,3 +4,8 @@ src/scraper/modules/__pycache__/
 geckodriver.log
 pyproject.toml
 test.log
+__pycache__/test_run.cpython-313.pyc
+src/__pycache__/
+src/scraper/__pycache__/
+src/scraper/modules/__pycache__/
+output/

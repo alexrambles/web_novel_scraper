@@ -15,8 +15,7 @@ from requests_html import HTMLSession
 
 ####### internal imports
 
-import modules.utils
-import modules.constants
+from . import utils, constants
 
 ################################ !Initializing logging module #################################
 
@@ -34,12 +33,12 @@ def get_chapter(url, driver=None, backup_dir=None, password='', log=''):
             try_again = False
             ## Open new browser if one isn't already available
             if driver is None:
-                init_selenium = modules.utils.init_selenium(url)
+                init_selenium = utils.init_selenium(url)
                 driver = init_selenium[0]
                 chapter_etree = etree.HTML(driver.page_source)
 
             elif 'knoxt' in url:
-                session = modules.utils.get_with_requests(url)
+                session = utils.get_with_requests(url)
                 session_html = session.html.html
                 chapter_etree = etree.HTML(session_html)
 
@@ -66,7 +65,7 @@ def get_chapter(url, driver=None, backup_dir=None, password='', log=''):
                             wait.until(EC.presence_of_element_located(By.XPATH, '//div[@class="post"]/div/p'))
 
                         else:
-                            quit_loop = modules.utils.get_selenium(url, driver)
+                            quit_loop = utils.get_selenium(url, driver)
                             if quit_loop:
                                 break
 
@@ -84,10 +83,10 @@ def get_chapter(url, driver=None, backup_dir=None, password='', log=''):
                 content_body = etree.HTML(site_body.get_attribute("innerHTML"))
 
             # Unlock site if locked
-            driver = modules.utils.unlock_site(driver, chapter_etree, password)
+            driver = utils.unlock_site(driver, chapter_etree, password)
 
             # Get chapter title/subtitle/filename
-            chapter_info = modules.utils.get_chapter_info(driver, chapter_etree, url)
+            chapter_info = utils.get_chapter_info(driver, chapter_etree, url)
 
             chapter_title = chapter_info[0]
             chapter_subtitle = chapter_info[1]
@@ -97,7 +96,7 @@ def get_chapter(url, driver=None, backup_dir=None, password='', log=''):
             log.info("Obtaining chapter_elements.")
 
             if 'wattpad' in url:
-                modules.utils.wattpad_scroll_down(driver)
+                utils.wattpad_scroll_down(driver)
                 chapter_etree = etree.HTML(driver.page_source)
                 chapter_elements = chapter_etree.cssselect("div.page p")
             else:
@@ -119,10 +118,10 @@ def get_chapter(url, driver=None, backup_dir=None, password='', log=''):
                 element_content = ''
 
                 if current_element.tag == 'a':
-                    chapter_html_list = modules.utils.append_a_element(current_element, chapter_html_list, img_dir)
+                    chapter_html_list = utils.append_a_element(current_element, chapter_html_list, img_dir)
 
                 elif current_element.tag in ['p', 'span']:
-                    chapter_html_list = modules.utils.append_p_or_span(driver, wait, chapter_etree, current_element, chapter_html_list, element_content, footer_content)
+                    chapter_html_list = utils.append_p_or_span(driver, wait, chapter_etree, current_element, chapter_html_list, element_content, footer_content)
 
                 ## TODO: proper handling of img tags
                 elif current_element.tag == 'hr':
@@ -133,9 +132,9 @@ def get_chapter(url, driver=None, backup_dir=None, password='', log=''):
 
                 elif current_element.cssselect('span'):
                     for bit_of_text in current_element.cssselect('span[face*="Arial"][face*="sans-serif"]'):
-                        if bit_of_text.text not in modules.constants.no_no_list:
+                        if bit_of_text.text not in constants.no_no_list:
                             text_to_add = f'<p>{bit_of_text.text}'
-                            if bit_of_text.tail not in modules.constants.no_no_list:
+                            if bit_of_text.tail not in constants.no_no_list:
                                 chapter_html_list.append(f'{text_to_add}{bit_of_text.tail}</p>')
 
                             else:
@@ -157,6 +156,6 @@ def get_chapter(url, driver=None, backup_dir=None, password='', log=''):
 
     else:
         # Creates and saves the html for the chapter.
-        modules.utils.create_chapter_html_file(chapter_html_list, chapter_title, chapter_subtitle, footer_content, backup_dir, chapter_filename)
+        utils.create_chapter_html_file(chapter_html_list, chapter_title, chapter_subtitle, footer_content, backup_dir, chapter_filename)
 
         return chapter_filename

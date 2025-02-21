@@ -15,13 +15,13 @@ import time
 import logging
 import sys
 
-import modules.constants
-
+from . import constants
+from urllib.parse import urlparse
 
 ################################ Creating logging module #################################
 
-def setup_logging():
-    log = logging.getLogger(__name__)
+def setup_logging(name=None):
+    log = logging.getLogger(name if name else __name__)
     log.setLevel(logging.DEBUG)
 
     formatter = logging.Formatter('%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s : %(funcName)s:%(lineno)d] \n %(message)s\n',
@@ -300,7 +300,7 @@ def get_chapter_info(driver, chapter_etree, url):
 
 def append_p_or_span(driver, wait, chapter_etree, current_element, chapter_html_list, element_content, footer_content):
     if current_element.cssselect(':has(em), :has(strong), :has(sup), :has(i), :has(b), :has(span)'):
-        if current_element.text is not None and current_element.text not in modules.constants.no_no_list:
+        if current_element.text is not None and current_element.text not in constants.no_no_list:
             element_content += current_element.text
 
         for current_sub_element in current_element.cssselect('*'):
@@ -347,19 +347,19 @@ def append_p_or_span(driver, wait, chapter_etree, current_element, chapter_html_
                 if current_sub_element.tail is not None:
                     element_content += current_sub_element.tail
 
-            elif current_sub_element.text not in modules.constants.no_no_list:
+            elif current_sub_element.text not in constants.no_no_list:
                 if current_sub_element.get('style') is not None and ('font-weight: 400' in current_sub_element.get('style') or 'mso-fareast-font-family:' in current_sub_element.get('style')):
                     element_content += f'<p>{current_sub_element.text}</p>'
 
                 elif 'face' in current_sub_element.attrib:
                     element_content += f'<p>{current_sub_element.text}</p>'
 
-            if current_sub_element.tail not in modules.constants.no_no_list and current_sub_element.tag != 'span':
+            if current_sub_element.tail not in constants.no_no_list and current_sub_element.tag != 'span':
                 if element_content[-len(current_sub_element.tag) + 1:] == f'{current_sub_element.tag}>':
                     element_content = element_content[:-len(current_sub_element.tag) - 1]
                     element_content += f'{current_sub_element.text}</{current_sub_element.tag}>{current_sub_element.tail}'
 
-                elif current_sub_element.text not in modules.constants.no_no_list and current_sub_element.text not in '\t'.join(footer_content):
+                elif current_sub_element.text not in constants.no_no_list and current_sub_element.text not in '\t'.join(footer_content):
                     element_content += f' <{current_sub_element.tag}>{current_sub_element.text}</{current_sub_element.tag}>{current_sub_element.tail}'
 
                 else:
@@ -369,26 +369,26 @@ def append_p_or_span(driver, wait, chapter_etree, current_element, chapter_html_
                     element_content = element_content[:-len(current_sub_element.tag) - 1]
                     element_content += f'{current_sub_element.text}</{current_sub_element.tag}>'
 
-                elif 'face' in current_sub_element.attrib and current_sub_element.tag == 'span' and current_sub_element.text not in modules.constants.no_no_list and current_sub_element.text not in element_content:
+                elif 'face' in current_sub_element.attrib and current_sub_element.tag == 'span' and current_sub_element.text not in constants.no_no_list and current_sub_element.text not in element_content:
                     if current_sub_element.getparent().tag == 'i' and element_content[-4:] == '</i>':
                         chapter_html_list[:-4].append(f' {current_sub_element.text}</i>')
 
                     else:
                         chapter_html_list.append(f'<p>{current_sub_element.text}</p>')
 
-                elif current_sub_element.text not in modules.constants.no_no_list and current_sub_element.text not in element_content and (current_sub_element.text is not None or current_sub_element.tail is not None):
+                elif current_sub_element.text not in constants.no_no_list and current_sub_element.text not in element_content and (current_sub_element.text is not None or current_sub_element.tail is not None):
                     element_content += f' <{current_sub_element.tag}>{current_sub_element.text}</{current_sub_element.tag}>'
 
-        if element_content not in footer_content and current_element.tail is not None and current_element.tail not in modules.constants.no_no_list:
+        if element_content not in footer_content and current_element.tail is not None and current_element.tail not in constants.no_no_list:
             element_content = f'{element_content}{current_element.tail}</p>'
 
-    elif current_element.text is not None and current_element.text not in modules.constants.no_no_list:
+    elif current_element.text is not None and current_element.text not in constants.no_no_list:
         element_content = current_element.text
 
     if element_content is None:
         pass
 
-    elif element_content not in chapter_html_list and element_content not in modules.constants.no_no_list:
+    elif element_content not in chapter_html_list and element_content not in constants.no_no_list:
         chapter_html_list.append(f'<p>{element_content}</p>')
 
     return chapter_html_list
@@ -413,11 +413,11 @@ def create_chapter_html_file(chapter_html_list, chapter_title, chapter_subtitle,
 
     chapter_html = f'<article id="{chapter_filename}_body">{chapter_text}</article>'
     chapter_html = f'<!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang = "en" xml:lang="en"><head><title style="display:none;">{chapter_title}</title></head><body epub:type="chapter"><div epub:type="bodymatter"><div><h1 epub:type="title" id="{chapter_filename}">{chapter_title}</h1><h2 epub:type="subtitle">{chapter_subtitle}</h2>{chapter_html}</div>{footer}</div></body></html>'
-    modules.utils.save_file(chapter_html, f'{backup_dir}{chapter_filename}.html', write_mode='w+')
+    save_file(chapter_html, f'{backup_dir}{chapter_filename}.html', write_mode='w+')
 
 
 def append_a_element(current_element, chapter_html_list, img_dir):
-    if current_element.get('href') is not None and current_element.get('href')[-4:] in modules.constants.img_suffixes:
+    if current_element.get('href') is not None and current_element.get('href')[-4:] in constants.img_suffixes:
         if current_element.cssselect('*[contains(@*, "description")]'):
             img_description = current_element.cssselect('@*[contains(., "description")]')[0].text
             img_html = get_img(current_element.get('href'), img_dir, img_description)
@@ -515,3 +515,9 @@ def get_novelupdates_data(novel_title, get_cover = True, novelupdates_toc = True
 ####def scrape_ch():
 
 ####def parse_ch(path):
+logger = setup_logging(__name__)
+
+def validate_url(url):
+    """Validate URL format"""
+    parsed = urlparse(url)
+    return bool(parsed.scheme) and bool(parsed.netloc)
